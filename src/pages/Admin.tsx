@@ -30,18 +30,29 @@ export default function Admin() {
     }
     
     checkImportData();
+    
+    const interval = setInterval(checkImportData, 1000);
+    return () => clearInterval(interval);
   }, []);
   
   const checkImportData = () => {
     const imported = localStorage.getItem('liga_stavok_import');
+    console.log('Checking import data:', imported ? 'found' : 'not found');
+    
     if (imported) {
       try {
         const data = JSON.parse(imported);
+        console.log('Import data parsed:', data.length, 'matches');
         setImportCount(data.length);
         setHasImportData(true);
-      } catch {
+      } catch (e) {
+        console.error('Failed to parse import data:', e);
         setHasImportData(false);
+        setImportCount(0);
       }
+    } else {
+      setHasImportData(false);
+      setImportCount(0);
     }
   };
   
@@ -296,7 +307,7 @@ export default function Admin() {
             </p>
             <div className="bg-background rounded-lg p-3 border border-border">
               <a
-                href={`javascript:(function(){const m=[];const p=/([А-Яа-я\\s\\.\\-]+[А-Яа-я])\\s*[-–—vs\\.]+\\s*([А-Яа-я\\s\\.\\-]+[А-Яа-я])/gi;document.querySelectorAll('*').forEach(e=>{const t=(e.textContent||'').trim();if(t.length>10&&t.length<200){const r=t.match(p);if(r){const s=t.split(/[-–—vs\\.]/);if(s.length===2){const p1=s[0].trim(),p2=s[1].trim();if(p1.length>3&&p2.length>3&&p1.length<50&&p2.length<50){m.push({player1:p1,player2:p2})}}}}});const u=[];const n=new Set();m.forEach(x=>{const k=x.player1+'|'+x.player2;if(!n.has(k)){n.add(k);u.push(x)}});if(u.length>0){localStorage.setItem('liga_stavok_import',JSON.stringify(u));const d=document.createElement('div');d.style.cssText='position:fixed;top:20px;right:20px;background:#22c55e;color:white;padding:20px;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.3);z-index:999999;font-family:system-ui;min-width:300px';d.innerHTML='<div style="font-size:18px;font-weight:bold;margin-bottom:8px">✅ Найдено '+u.length+' матчей!</div><div style="font-size:14px;opacity:0.9;margin-bottom:12px">Переходи в админку для импорта</div><button onclick="window.open(\\'/admin\\',\\'_blank\\');this.parentElement.remove()" style="background:white;color:#22c55e;border:none;padding:8px 16px;border-radius:6px;font-weight:600;cursor:pointer">Открыть админку</button>';document.body.appendChild(d);setTimeout(()=>d.remove(),10000)}else{alert('❌ Матчи не найдены.\\nПроверь, что ты на странице настольного тенниса')}})();`}
+                href={`javascript:(function(){console.log('TT Predict Parser started');const m=[];const patterns=[/([А-Яа-я\\s\\.\\-]+[А-Яа-я])\\s*[-–—vs\\.]+\\s*([А-Яа-я\\s\\.\\-]+[А-Яа-я])/gi,/([A-Za-z\\s\\.\\-]+[A-Za-z])\\s*[-–—vs\\.]+\\s*([A-Za-z\\s\\.\\-]+[A-Za-z])/gi];document.querySelectorAll('*').forEach(e=>{const t=(e.textContent||'').trim();if(t.length>10&&t.length<200){patterns.forEach(p=>{if(p.test(t)){const s=t.split(/[-–—vs\\.]/);if(s.length===2){const p1=s[0].trim(),p2=s[1].trim();if(p1.length>3&&p2.length>3&&p1.length<50&&p2.length<50&&p1!==p2){m.push({player1:p1,player2:p2})}}}p.lastIndex=0})}});const u=[];const n=new Set();m.forEach(x=>{const k=x.player1.toLowerCase()+'|'+x.player2.toLowerCase();if(!n.has(k)){n.add(k);u.push(x)}});console.log('Matches found:',u);if(u.length>0){try{localStorage.setItem('liga_stavok_import',JSON.stringify(u));const saved=localStorage.getItem('liga_stavok_import');if(saved){console.log('Saved to localStorage successfully');const d=document.createElement('div');d.style.cssText='position:fixed;top:20px;right:20px;background:#22c55e;color:white;padding:20px;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.3);z-index:999999;font-family:system-ui;min-width:300px';d.innerHTML='<div style="font-size:18px;font-weight:bold;margin-bottom:8px">✅ Найдено '+u.length+' матчей!</div><div style="font-size:14px;opacity:0.9;margin-bottom:12px">Данные сохранены. Переходи в админку.</div><button onclick="window.open(\\'/admin\\',\\'_blank\\');this.parentElement.remove()" style="background:white;color:#22c55e;border:none;padding:8px 16px;border-radius:6px;font-weight:600;cursor:pointer">Открыть админку</button>';document.body.appendChild(d);setTimeout(()=>d.remove(),15000)}else{alert('Ошибка сохранения в localStorage')}}catch(e){alert('Ошибка: '+e.message)}}else{alert('❌ Матчи не найдены.\\n\\nПроверь что ты на странице с настольным теннисом')}})();`}
                 className="text-xs font-mono bg-primary text-primary-foreground px-3 py-2 rounded inline-flex items-center gap-2 hover:opacity-80 transition-opacity cursor-move"
                 onClick={(e) => { e.preventDefault(); alert('💡 Инструкция:\n\n1. Зажми эту кнопку левой кнопкой мыши\n2. Перетащи её на панель закладок браузера (верхняя часть окна)\n3. Открой ligastavok.ru → Настольный теннис\n4. Нажми на эту закладку\n5. Вернись сюда и нажми "Импортировать"'); }}
               >
@@ -308,15 +319,43 @@ export default function Admin() {
             </p>
           </div>
 
-          <Button 
-            onClick={importFromLigaStavok}
-            variant="outline"
-            className="w-full"
-            disabled={!hasImportData}
-          >
-            <Icon name="Download" size={16} />
-            Импортировать найденные матчи ({importCount})
-          </Button>
+          {hasImportData && importCount > 0 && (
+            <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4 mb-4 animate-pulse">
+              <div className="flex items-center gap-3">
+                <div className="bg-green-500 rounded-full p-2">
+                  <Icon name="Check" size={20} className="text-white" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-bold text-green-400">Готово к импорту!</h3>
+                  <p className="text-xs text-muted-foreground">Найдено {importCount} матчей из Liga Stavok</p>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          <div className="flex gap-2">
+            <Button 
+              onClick={importFromLigaStavok}
+              className="flex-1"
+              disabled={!hasImportData}
+            >
+              <Icon name="Download" size={16} />
+              Импортировать {importCount > 0 ? `(${importCount})` : ''}
+            </Button>
+            <Button 
+              onClick={checkImportData}
+              variant="outline"
+              size="sm"
+            >
+              <Icon name="RefreshCw" size={16} />
+            </Button>
+          </div>
+          
+          {!hasImportData && (
+            <p className="text-xs text-muted-foreground text-center mt-3">
+              Запусти букмарклет на странице Liga Stavok, затем вернись сюда
+            </p>
+          )}
         </Card>
 
         <Card className="p-4 border-amber-500/30 bg-amber-500/5">
