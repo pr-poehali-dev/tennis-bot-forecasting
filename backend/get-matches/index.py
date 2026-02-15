@@ -108,67 +108,33 @@ def handle_free_scraping():
 
 
 def scrape_liga_stavok_auth(login, password):
-    """Парсинг Liga Stavok с авторизацией"""
-    global liga_stavok_cookies
+    """Парсинг Liga Stavok — используем публичные данные без авторизации"""
     events = []
     
     ctx = ssl.create_default_context()
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
     
-    if not liga_stavok_cookies:
-        try:
-            print('Авторизация на Liga Stavok...')
-            
-            cookie_jar = http.cookiejar.CookieJar()
-            opener = urllib.request.build_opener(
-                urllib.request.HTTPCookieProcessor(cookie_jar),
-                urllib.request.HTTPSHandler(context=ctx)
-            )
-            
-            auth_data = {
-                'login': login,
-                'password': password
-            }
-            
-            auth_url = 'https://ligastavok.ru/api/user/login'
-            headers = {
-                'User-Agent': UA,
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            }
-            
-            req = urllib.request.Request(
-                auth_url,
-                data=json.dumps(auth_data).encode('utf-8'),
-                headers=headers,
-                method='POST'
-            )
-            
-            resp = opener.open(req, timeout=10)
-            auth_result = json.loads(resp.read().decode('utf-8'))
-            
-            print(f'Авторизация: {auth_result.get("success", False)}')
-            
-            cookies_str = '; '.join([f'{cookie.name}={cookie.value}' for cookie in cookie_jar])
-            liga_stavok_cookies = cookies_str
-            
-        except Exception as e:
-            print(f'Ошибка авторизации: {str(e)}')
-            return events
+    print(f'Liga Stavok: попытка парсинга публичных данных')
     
     try:
         headers = {
             'User-Agent': UA,
-            'Accept': 'application/json',
-            'Cookie': liga_stavok_cookies,
-            'Referer': 'https://ligastavok.ru/'
+            'Accept': 'application/json, text/plain, */*',
+            'Referer': 'https://ligastavok.ru/table-tennis',
+            'Origin': 'https://ligastavok.ru',
+            'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Connection': 'keep-alive',
+            'Sec-Fetch-Dest': 'empty',
+            'Sec-Fetch-Mode': 'cors',
+            'Sec-Fetch-Site': 'same-origin'
         }
         
         url = 'https://ligastavok.ru/api/sport/live?sportId=12'
         req = urllib.request.Request(url, headers=headers)
         
-        with urllib.request.urlopen(req, timeout=10, context=ctx) as resp:
+        with urllib.request.urlopen(req, timeout=15, context=ctx) as resp:
             data = json.loads(resp.read().decode('utf-8'))
             
             if isinstance(data, dict) and 'data' in data:
@@ -177,22 +143,28 @@ def scrape_liga_stavok_auth(login, password):
                     if ev:
                         events.append(ev)
         
-        print(f'Liga Stavok live: {len(events)} матчей')
+        print(f'✓ Liga Stavok live: {len(events)} матчей')
     except Exception as e:
-        print(f'Liga Stavok live error: {str(e)}')
+        print(f'✗ Liga Stavok live error: {str(e)}')
     
     try:
         headers = {
             'User-Agent': UA,
-            'Accept': 'application/json',
-            'Cookie': liga_stavok_cookies,
-            'Referer': 'https://ligastavok.ru/'
+            'Accept': 'application/json, text/plain, */*',
+            'Referer': 'https://ligastavok.ru/table-tennis',
+            'Origin': 'https://ligastavok.ru',
+            'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Connection': 'keep-alive',
+            'Sec-Fetch-Dest': 'empty',
+            'Sec-Fetch-Mode': 'cors',
+            'Sec-Fetch-Site': 'same-origin'
         }
         
         url = 'https://ligastavok.ru/api/sport/line?sportId=12'
         req = urllib.request.Request(url, headers=headers)
         
-        with urllib.request.urlopen(req, timeout=10, context=ctx) as resp:
+        with urllib.request.urlopen(req, timeout=15, context=ctx) as resp:
             data = json.loads(resp.read().decode('utf-8'))
             
             if isinstance(data, dict) and 'data' in data:
@@ -201,9 +173,9 @@ def scrape_liga_stavok_auth(login, password):
                     if ev:
                         events.append(ev)
         
-        print(f'Liga Stavok line: {len(events)} всего')
+        print(f'✓ Liga Stavok line: {len(events)} всего')
     except Exception as e:
-        print(f'Liga Stavok line error: {str(e)}')
+        print(f'✗ Liga Stavok line error: {str(e)}')
     
     return events
 
