@@ -217,117 +217,7 @@ function parseEvent(ev: Record<string, unknown>): Match | null {
   }
 }
 
-function loadManualMatches(): Match[] {
-  try {
-    const stored = localStorage.getItem('manual_matches');
-    if (!stored) return [];
-    
-    const manual = JSON.parse(stored) as Array<{
-      id: string;
-      player1: string;
-      player2: string;
-      league: string;
-      status: 'live' | 'upcoming';
-      score?: { p1: number; p2: number };
-    }>;
-    
-    return manual.map(m => {
-      const r1 = rating(m.player1);
-      const r2 = rating(m.player2);
-      
-      const match: Match = {
-        id: m.id,
-        player1: {
-          id: m.player1,
-          name: m.player1,
-          rating: r1,
-          winRate: winrate(r1),
-          recentForm: form(m.player1),
-          country: 'RU'
-        },
-        player2: {
-          id: m.player2,
-          name: m.player2,
-          rating: r2,
-          winRate: winrate(r2),
-          recentForm: form(m.player2),
-          country: 'RU'
-        },
-        startTime: new Date().toISOString(),
-        status: m.status,
-        odds: odds(r1, r2),
-        league: m.league,
-        score: m.score
-      };
-      
-      match.prediction = predict(match);
-      return match;
-    });
-  } catch {
-    return [];
-  }
-}
 
-function generateDemoMatches(): Match[] {
-  const now = Date.now();
-  const players = [
-    'Petrov A.', 'Ivanov D.', 'Sidorov M.', 'Kozlov S.', 'Volkov P.',
-    'Smirnov I.', 'Kuznetsov V.', 'Popov N.', 'Sokolov E.', 'Lebedev K.',
-    'Novikov R.', 'Fedorov G.', 'Morozov L.', 'Vasiliev O.', 'Andreev B.',
-    'Mikhailov F.', 'Kiselev Y.', 'Orlov T.', 'Belov Z.', 'Tarasov W.'
-  ];
-  
-  const leagues = ['Лига Про Россия', 'Мастерс Минск', 'Сетка Кап'];
-  const matches: Match[] = [];
-  let id = 1000;
-  
-  for (let i = 0; i < 8; i++) {
-    const p1n = players[Math.floor(Math.random() * players.length)];
-    let p2n = players[Math.floor(Math.random() * players.length)];
-    while (p2n === p1n) p2n = players[Math.floor(Math.random() * players.length)];
-    
-    const r1 = rating(p1n), r2 = rating(p2n);
-    const status = i < 2 ? 'live' : (i < 6 ? 'upcoming' : 'finished');
-    const league = leagues[i % 3];
-    
-    const match: Match = {
-      id: String(id++),
-      player1: { id: p1n, name: p1n, rating: r1, winRate: winrate(r1), recentForm: form(p1n), country: 'RU' },
-      player2: { id: p2n, name: p2n, rating: r2, winRate: winrate(r2), recentForm: form(p2n), country: 'RU' },
-      startTime: new Date(now + (i - 2) * 30 * 60000).toISOString(),
-      status,
-      odds: odds(r1, r2),
-      league
-    };
-    
-    if (status === 'live') {
-      const s1 = Math.floor(Math.random() * 3);
-      const s2 = Math.floor(Math.random() * 3);
-      match.score = { p1: s1, p2: s2 };
-      match.sets = [
-        { p1: 11, p2: 9 },
-        { p1: 9, p2: 11 },
-        { p1: Math.floor(Math.random() * 11), p2: Math.floor(Math.random() * 11) }
-      ];
-    }
-    
-    if (status === 'finished') {
-      const winner = Math.random() > 0.5;
-      match.score = { p1: winner ? 3 : 1, p2: winner ? 1 : 3 };
-      match.sets = [
-        { p1: 11, p2: 8 },
-        { p1: 7, p2: 11 },
-        { p1: 11, p2: 9 },
-        { p1: winner ? 11 : 5, p2: winner ? 5 : 11 }
-      ];
-    }
-    
-    match.prediction = predict(match);
-    matches.push(match);
-  }
-  
-  return matches;
-}
 
 const API_BACKEND = 'https://functions.poehali.dev/6a9f6c04-269b-4b4b-9151-6645433dba77';
 
@@ -377,19 +267,13 @@ function parseApiSportsEvent(ev: Record<string, unknown>): Match | null {
 
 export async function fetchMatches(): Promise<ApiResponse> {
   const allMatches: Match[] = [];
-  let source = 'demo';
-  
-  const manualMatches = loadManualMatches();
-  if (manualMatches.length > 0) {
-    allMatches.push(...manualMatches);
-    source = 'manual';
-  }
+  let source = 'liga-stavok';
   
   try {
-    const apiData = await fetchJSON(API_BACKEND) as { events?: Record<string, unknown>[]; source?: string; message?: string } | null;
+    const apiData = await fetchJSON(API_BACKEND) as { events?: Record<string, unknown>[]; source?: string; message?: string; total?: number } | null;
     
     if (apiData) {
-      if (apiData.source && apiData.source !== 'demo') {
+      if (apiData.source) {
         source = apiData.source;
       }
       

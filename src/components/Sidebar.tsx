@@ -52,21 +52,6 @@ export default function Sidebar({ activeTab, onTabChange, stats }: SidebarProps)
           ))}
         </nav>
 
-        {/* Admin button */}
-        <div className="px-4 pb-3">
-          <a
-            href="/admin"
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 transition-all duration-200"
-          >
-            <Icon name="Settings" size={18} />
-            <div className="flex-1 text-left">
-              <div className="text-sm font-semibold">Админка</div>
-              <div className="text-xs opacity-80">Добавить матчи</div>
-            </div>
-            <Icon name="ChevronRight" size={16} />
-          </a>
-        </div>
-
         {/* Bottom stats card */}
         <div className="p-4 border-t border-border">
           <div className="bg-secondary/50 rounded-lg p-4 space-y-3">

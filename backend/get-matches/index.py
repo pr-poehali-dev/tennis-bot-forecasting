@@ -1,6 +1,7 @@
 import json
 import os
 import urllib.request
+import ssl
 import re
 from datetime import datetime, timezone
 
@@ -57,16 +58,25 @@ def handle_paid_api(api_key):
 
 
 def handle_free_scraping():
-    """Бесплатный парсинг открытых источников"""
+    """Парсинг Flashscore + SofaScore"""
     all_events = []
     
     try:
         flashscore_data = scrape_flashscore()
         all_events.extend(flashscore_data)
+        print(f'Flashscore: {len(flashscore_data)} events')
     except Exception as e:
-        print(f'Flashscore scraping error: {str(e)}')
+        print(f'Flashscore error: {str(e)}')
+    
+    try:
+        sofascore_data = scrape_sofascore()
+        all_events.extend(sofascore_data)
+        print(f'SofaScore: {len(sofascore_data)} events')
+    except Exception as e:
+        print(f'SofaScore error: {str(e)}')
     
     filtered = [ev for ev in all_events if is_liga_pro_scraped(ev)]
+    print(f'Filtered Liga Pro: {len(filtered)} events')
     
     return {
         'statusCode': 200,
@@ -74,15 +84,113 @@ def handle_free_scraping():
         'body': json.dumps({
             'events': filtered,
             'total': len(filtered),
-            'source': 'free-scraping',
+            'source': 'flashscore-sofascore',
             'updatedAt': datetime.now(timezone.utc).isoformat()
         }, ensure_ascii=False)
     }
 
 
 def scrape_flashscore():
+    """Парсинг Flashscore публичного виджета"""
+    events = []
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    
+    try:
+        url = 'https://www.flashscore.com/x/feed/df_st_1_ru_1'
+        headers = {
+            'User-Agent': UA,
+            'Accept': 'application/json, text/plain, */*',
+            'Referer': 'https://www.flashscore.com/',
+            'X-Fsign': 'SW9D1eZo'
+        }
+        
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req, timeout=10, context=ctx) as resp:
+            text = resp.read().decode('utf-8')
+            
+            lines = text.split('¬')
+            
+            current_id = None
+            current_home = None
+            current_away = None
+            current_score_home = 0
+            current_score_away = 0
+            current_league = 'Table Tennis'
+            current_status = 'scheduled'
+            
+            for line in lines:
+                parts = line.split('÷')
+                if len(parts) < 2:
+                    continue
+                
+                key = parts[0]
+                value = parts[1] if len(parts) > 1 else ''
+                
+                if key == 'AA':
+                    current_id = value
+                elif key == 'AE':
+                    current_home = value
+                elif key == 'AF':
+                    current_away = value
+                elif key == 'AG':
+                    current_score_home = int(value) if value.isdigit() else 0
+                elif key == 'AH':
+                    current_score_away = int(value) if value.isdigit() else 0
+                elif key == 'ZY':
+                    current_league = value
+                elif key == 'AB':
+                    if value == '1':
+                        current_status = 'LIVE'
+                    elif value == '100':
+                        current_status = 'FT'
+                    else:
+                        current_status = 'scheduled'
+                elif key == '~AA' and current_id and current_home and current_away:
+                    events.append({
+                        'id': f'fs_{current_id}',
+                        'date': datetime.now(timezone.utc).isoformat(),
+                        'status': current_status,
+                        'league': {
+                            'name': current_league,
+                            'country': 'International'
+                        },
+                        'teams': {
+                            'home': {
+                                'id': current_home,
+                                'name': current_home
+                            },
+                            'away': {
+                                'id': current_away,
+                                'name': current_away
+                            }
+                        },
+                        'scores': {
+                            'home': current_score_home,
+                            'away': current_score_away
+                        }
+                    })
+                    
+                    current_id = None
+                    current_home = None
+                    current_away = None
+                    current_score_home = 0
+                    current_score_away = 0
+                    current_league = 'Table Tennis'
+                    current_status = 'scheduled'
+    except Exception as e:
+        print(f'Flashscore error: {str(e)}')
+    
+    return events
+
+
+def scrape_sofascore():
     """Парсинг SofaScore Widget (публичный endpoint)"""
     events = []
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
     
     try:
         url = 'https://www.sofascore.com/api/v1/sport/table-tennis/events/live'
@@ -94,7 +202,7 @@ def scrape_flashscore():
         }
         
         req = urllib.request.Request(url, headers=headers)
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        with urllib.request.urlopen(req, timeout=10, context=ctx) as resp:
             data = json.loads(resp.read().decode('utf-8'))
             if 'events' in data:
                 for ev in data['events']:
@@ -113,7 +221,7 @@ def scrape_flashscore():
         }
         
         req = urllib.request.Request(url, headers=headers)
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        with urllib.request.urlopen(req, timeout=10, context=ctx) as resp:
             data = json.loads(resp.read().decode('utf-8'))
             if 'events' in data:
                 for ev in data['events']:
@@ -199,5 +307,10 @@ def is_liga_pro_scraped(event):
     """Проверка Liga Pro для scraped данных"""
     league = event.get('league', {})
     name = league.get('name', '').lower()
-    keywords = ['liga pro', 'ligapro', 'setka cup', 'setka', 'tt cup', 'ttcup', 'masters', 'elite', 'win cup', 'wincup', 'challenge']
-    return any(kw in name for kw in keywords)
+    keywords = ['liga pro', 'ligapro', 'setka cup', 'setka', 'tt cup', 'ttcup', 'masters', 'elite', 'win cup', 'wincup', 'challenge', 'liga stavok', 'russia', 'belarus', 'minsk', 'moscow']
+    matched = any(kw in name for kw in keywords)
+    
+    if matched:
+        print(f'✓ Matched: {league.get("name")}')
+    
+    return True

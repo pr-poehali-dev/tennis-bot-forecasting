@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import Sidebar from '@/components/Sidebar';
 import StatsBar from '@/components/StatsBar';
 import MatchCard from '@/components/MatchCard';
@@ -11,10 +11,9 @@ import Icon from '@/components/ui/icon';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { filterMatches, calcStats } from '@/data/matches';
-import type { MatchFilters, PredictionStats, Match } from '@/data/matches';
+import type { MatchFilters, PredictionStats } from '@/data/matches';
 import { useMatches } from '@/hooks/use-matches';
 import { useStats, useSavePredictions } from '@/hooks/use-stats';
-import { useLiveScoreUpdater } from '@/hooks/use-live-score-updater';
 
 export default function Index() {
   const [activeTab, setActiveTab] = useState('predictions');
@@ -23,45 +22,9 @@ export default function Index() {
   const { data, isLoading, error, dataUpdatedAt } = useMatches();
   const { data: dbStats } = useStats(statsPeriod);
   const savePredictions = useSavePredictions();
-  const [liveScores, setLiveScores] = useState<Record<string, { p1: number; p2: number }>>({});
 
   const matches = data?.matches ?? [];
   const leagues = data?.leagues ?? [];
-  
-  const handleLiveScoreUpdate = useCallback((updates: Array<{ id: string; score: { p1: number; p2: number } }>) => {
-    const newScores: Record<string, { p1: number; p2: number }> = {};
-    updates.forEach(u => {
-      newScores[u.id] = u.score;
-    });
-    setLiveScores(prev => ({ ...prev, ...newScores }));
-    
-    const stored = localStorage.getItem('manual_matches');
-    if (stored) {
-      try {
-        const manual = JSON.parse(stored);
-        const updated = manual.map((m: Match) => {
-          if (newScores[m.id]) {
-            return { ...m, score: newScores[m.id] };
-          }
-          return m;
-        });
-        localStorage.setItem('manual_matches', JSON.stringify(updated));
-      } catch (e) {
-        console.error('Failed to update manual matches', e);
-      }
-    }
-  }, []);
-  
-  useLiveScoreUpdater(matches, handleLiveScoreUpdate);
-  
-  const matchesWithUpdatedScores = useMemo(() => {
-    return matches.map(m => {
-      if (liveScores[m.id]) {
-        return { ...m, score: liveScores[m.id] };
-      }
-      return m;
-    });
-  }, [matches, liveScores]);
 
   const stats: PredictionStats = useMemo(() => {
     if (dbStats && dbStats.total > 0) {
@@ -90,13 +53,13 @@ export default function Index() {
 
   const filteredMatches = useMemo(() => {
     if (activeTab === 'predictions') {
-      const active = matchesWithUpdatedScores.filter(
+      const active = matches.filter(
         (m) => (m.status === 'upcoming' || m.status === 'live') && m.prediction
       );
       return filterMatches(active, { ...filters, status: 'all' });
     }
-    return filterMatches(matchesWithUpdatedScores, filters);
-  }, [filters, activeTab, matchesWithUpdatedScores]);
+    return filterMatches(matches, filters);
+  }, [filters, activeTab, matches]);
 
   const renderContent = () => {
     if (isLoading) {
@@ -183,30 +146,29 @@ export default function Index() {
               ))}
             </div>
             {filteredMatches.length === 0 && (
-              <Card className="p-8 border-border/50">
+              <Card className="p-8 border-border/50 border-amber-500/20 bg-amber-500/5">
                 <div className="text-center">
-                  <Icon name="Inbox" size={48} className="mx-auto mb-4 text-muted-foreground opacity-50" />
-                  <h3 className="text-lg font-semibold mb-2">Нет активных матчей</h3>
+                  <Icon name="AlertTriangle" size={48} className="mx-auto mb-4 text-amber-500" />
+                  <h3 className="text-lg font-semibold mb-2 text-amber-500">Бесплатные источники заблокированы</h3>
                   <p className="text-sm text-muted-foreground mb-4">
-                    Добавьте матчи вручную через админку или подключите API
+                    Liga Stavok, SofaScore и Flashscore блокируют парсинг.<br />
+                    Для работы требуется платный API.
                   </p>
-                  <div className="flex items-center justify-center gap-3">
-                    <a href="/admin">
-                      <Button>
-                        <Icon name="Plus" size={16} />
-                        Добавить матчи
-                      </Button>
-                    </a>
+                  <div className="flex flex-col items-center gap-3">
                     <a 
                       href="https://rapidapi.com/api-sports/api/table-tennis" 
                       target="_blank" 
                       rel="noopener noreferrer"
                     >
-                      <Button variant="outline">
+                      <Button className="bg-amber-500 hover:bg-amber-600 text-white">
                         <Icon name="Zap" size={16} />
-                        Подключить API
+                        Подключить RapidAPI ($9.99/мес)
                       </Button>
                     </a>
+                    <p className="text-xs text-muted-foreground max-w-md">
+                      После покупки добавь ключ в секреты проекта:<br />
+                      <code className="bg-muted px-2 py-1 rounded">RAPID_API_KEY</code>
+                    </p>
                   </div>
                 </div>
               </Card>
@@ -376,30 +338,13 @@ export default function Index() {
               <h1 className="text-lg font-bold text-foreground">TT Predict</h1>
             </div>
             <div className="flex items-center gap-2 ml-auto">
-              {data?.source === 'api-sports' && (
+              {data?.source === 'liga-stavok' && (
                 <Badge className="bg-primary/15 text-primary border-primary/30 gap-1">
                   <span className="relative flex h-1.5 w-1.5">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75" />
                     <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-primary" />
                   </span>
-                  Live API
-                </Badge>
-              )}
-              {data?.source === 'manual' && (
-                <Badge className="bg-blue-500/15 text-blue-400 border-blue-500/30 gap-1 text-xs">
-                  <Icon name="Edit" size={12} />
-                  Ручной ввод
-                  {Object.keys(liveScores).length > 0 && (
-                    <span className="relative flex h-1.5 w-1.5 ml-1">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
-                      <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-blue-400" />
-                    </span>
-                  )}
-                </Badge>
-              )}
-              {data?.source === 'live' && (
-                <Badge className="bg-green-500/15 text-green-400 border-green-500/30 gap-1 text-xs">
-                  SofaScore
+                  Liga Stavok
                 </Badge>
               )}
               {liveCount > 0 && (
