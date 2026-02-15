@@ -326,6 +326,11 @@ export default function Index() {
                   Live API
                 </Badge>
               )}
+              {data?.source === 'demo' && (
+                <Badge className="bg-amber-500/15 text-amber-400 border-amber-500/30 gap-1 text-xs">
+                  Demo режим
+                </Badge>
+              )}
               {data?.source === 'generated' && (
                 <Badge className="bg-amber-500/15 text-amber-400 border-amber-500/30 gap-1 text-xs">
                   Симуляция

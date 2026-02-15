@@ -217,28 +217,97 @@ function parseEvent(ev: Record<string, unknown>): Match | null {
   }
 }
 
+function generateDemoMatches(): Match[] {
+  const now = Date.now();
+  const players = [
+    'Petrov A.', 'Ivanov D.', 'Sidorov M.', 'Kozlov S.', 'Volkov P.',
+    'Smirnov I.', 'Kuznetsov V.', 'Popov N.', 'Sokolov E.', 'Lebedev K.',
+    'Novikov R.', 'Fedorov G.', 'Morozov L.', 'Vasiliev O.', 'Andreev B.',
+    'Mikhailov F.', 'Kiselev Y.', 'Orlov T.', 'Belov Z.', 'Tarasov W.'
+  ];
+  
+  const leagues = ['Лига Про Россия', 'Мастерс Минск', 'Сетка Кап'];
+  const matches: Match[] = [];
+  let id = 1000;
+  
+  for (let i = 0; i < 8; i++) {
+    const p1n = players[Math.floor(Math.random() * players.length)];
+    let p2n = players[Math.floor(Math.random() * players.length)];
+    while (p2n === p1n) p2n = players[Math.floor(Math.random() * players.length)];
+    
+    const r1 = rating(p1n), r2 = rating(p2n);
+    const status = i < 2 ? 'live' : (i < 6 ? 'upcoming' : 'finished');
+    const league = leagues[i % 3];
+    
+    const match: Match = {
+      id: String(id++),
+      player1: { id: p1n, name: p1n, rating: r1, winRate: winrate(r1), recentForm: form(p1n), country: 'RU' },
+      player2: { id: p2n, name: p2n, rating: r2, winRate: winrate(r2), recentForm: form(p2n), country: 'RU' },
+      startTime: new Date(now + (i - 2) * 30 * 60000).toISOString(),
+      status,
+      odds: odds(r1, r2),
+      league
+    };
+    
+    if (status === 'live') {
+      const s1 = Math.floor(Math.random() * 3);
+      const s2 = Math.floor(Math.random() * 3);
+      match.score = { p1: s1, p2: s2 };
+      match.sets = [
+        { p1: 11, p2: 9 },
+        { p1: 9, p2: 11 },
+        { p1: Math.floor(Math.random() * 11), p2: Math.floor(Math.random() * 11) }
+      ];
+    }
+    
+    if (status === 'finished') {
+      const winner = Math.random() > 0.5;
+      match.score = { p1: winner ? 3 : 1, p2: winner ? 1 : 3 };
+      match.sets = [
+        { p1: 11, p2: 8 },
+        { p1: 7, p2: 11 },
+        { p1: 11, p2: 9 },
+        { p1: winner ? 11 : 5, p2: winner ? 5 : 11 }
+      ];
+    }
+    
+    match.prediction = predict(match);
+    matches.push(match);
+  }
+  
+  return matches;
+}
+
 export async function fetchMatches(): Promise<ApiResponse> {
   const allMatches: Match[] = [];
   
-  const live = await fetchJSON(SOFASCORE_LIVE) as { events?: Record<string, unknown>[] } | null;
-  if (live?.events && Array.isArray(live.events)) {
-    for (const ev of live.events) {
-      if (isLigaPro(ev)) {
-        const m = parseEvent(ev);
-        if (m) allMatches.push(m);
+  try {
+    const live = await fetchJSON(SOFASCORE_LIVE) as { events?: Record<string, unknown>[] } | null;
+    if (live?.events && Array.isArray(live.events)) {
+      for (const ev of live.events) {
+        if (isLigaPro(ev)) {
+          const m = parseEvent(ev);
+          if (m) allMatches.push(m);
+        }
       }
     }
+    
+    const today = new Date().toISOString().split('T')[0];
+    const sched = await fetchJSON(`${SOFASCORE_SCHEDULED}/${today}`) as { events?: Record<string, unknown>[] } | null;
+    if (sched?.events && Array.isArray(sched.events)) {
+      for (const ev of sched.events) {
+        if (isLigaPro(ev)) {
+          const m = parseEvent(ev);
+          if (m) allMatches.push(m);
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('SofaScore API blocked, using demo data', e);
   }
   
-  const today = new Date().toISOString().split('T')[0];
-  const sched = await fetchJSON(`${SOFASCORE_SCHEDULED}/${today}`) as { events?: Record<string, unknown>[] } | null;
-  if (sched?.events && Array.isArray(sched.events)) {
-    for (const ev of sched.events) {
-      if (isLigaPro(ev)) {
-        const m = parseEvent(ev);
-        if (m) allMatches.push(m);
-      }
-    }
+  if (allMatches.length === 0) {
+    allMatches.push(...generateDemoMatches());
   }
   
   allMatches.sort((a, b) => {
@@ -257,7 +326,7 @@ export async function fetchMatches(): Promise<ApiResponse> {
   return {
     matches: allMatches,
     updatedAt: new Date().toISOString(),
-    source: allMatches.length > 0 ? 'live' : 'generated',
+    source: allMatches.length > 10 ? 'live' : 'demo',
     count: allMatches.length,
     liveCount,
     upcomingCount,
