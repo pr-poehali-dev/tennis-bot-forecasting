@@ -93,16 +93,24 @@ export default function Index() {
                   <div className="flex-1">
                     <h3 className="text-sm font-semibold text-amber-500 mb-1">Demo режим</h3>
                     <p className="text-xs text-muted-foreground mb-2">
-                      Для получения реальных матчей Liga Pro добавь API ключ RapidAPI в секреты проекта
+                      Для реальных матчей: добавь вручную через админку или подключи платный API
                     </p>
-                    <a 
-                      href="https://rapidapi.com/api-sports/api/table-tennis" 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="text-xs text-primary hover:underline"
-                    >
-                      Получить API ключ →
-                    </a>
+                    <div className="flex items-center gap-3">
+                      <a 
+                        href="/admin" 
+                        className="text-xs text-primary hover:underline font-medium"
+                      >
+                        Открыть админку →
+                      </a>
+                      <a 
+                        href="https://rapidapi.com/api-sports/api/table-tennis" 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-xs text-muted-foreground hover:underline"
+                      >
+                        Или получить API ключ
+                      </a>
+                    </div>
                   </div>
                 </div>
               </Card>
@@ -346,6 +354,12 @@ export default function Index() {
                     <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-primary" />
                   </span>
                   Live API
+                </Badge>
+              )}
+              {data?.source === 'manual' && (
+                <Badge className="bg-blue-500/15 text-blue-400 border-blue-500/30 gap-1 text-xs">
+                  <Icon name="Edit" size={12} />
+                  Ручной ввод
                 </Badge>
               )}
               {data?.source === 'live' && (

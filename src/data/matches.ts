@@ -217,6 +217,57 @@ function parseEvent(ev: Record<string, unknown>): Match | null {
   }
 }
 
+function loadManualMatches(): Match[] {
+  try {
+    const stored = localStorage.getItem('manual_matches');
+    if (!stored) return [];
+    
+    const manual = JSON.parse(stored) as Array<{
+      id: string;
+      player1: string;
+      player2: string;
+      league: string;
+      status: 'live' | 'upcoming';
+      score?: { p1: number; p2: number };
+    }>;
+    
+    return manual.map(m => {
+      const r1 = rating(m.player1);
+      const r2 = rating(m.player2);
+      
+      const match: Match = {
+        id: m.id,
+        player1: {
+          id: m.player1,
+          name: m.player1,
+          rating: r1,
+          winRate: winrate(r1),
+          recentForm: form(m.player1),
+          country: 'RU'
+        },
+        player2: {
+          id: m.player2,
+          name: m.player2,
+          rating: r2,
+          winRate: winrate(r2),
+          recentForm: form(m.player2),
+          country: 'RU'
+        },
+        startTime: new Date().toISOString(),
+        status: m.status,
+        odds: odds(r1, r2),
+        league: m.league,
+        score: m.score
+      };
+      
+      match.prediction = predict(match);
+      return match;
+    });
+  } catch {
+    return [];
+  }
+}
+
 function generateDemoMatches(): Match[] {
   const now = Date.now();
   const players = [
@@ -328,11 +379,19 @@ export async function fetchMatches(): Promise<ApiResponse> {
   const allMatches: Match[] = [];
   let source = 'demo';
   
+  const manualMatches = loadManualMatches();
+  if (manualMatches.length > 0) {
+    allMatches.push(...manualMatches);
+    source = 'manual';
+  }
+  
   try {
     const apiData = await fetchJSON(API_BACKEND) as { events?: Record<string, unknown>[]; source?: string; message?: string } | null;
     
     if (apiData) {
-      source = apiData.source || 'demo';
+      if (apiData.source && apiData.source !== 'demo') {
+        source = apiData.source;
+      }
       
       if (apiData.events && Array.isArray(apiData.events) && apiData.events.length > 0) {
         for (const ev of apiData.events) {
