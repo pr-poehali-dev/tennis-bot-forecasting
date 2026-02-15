@@ -21,20 +21,20 @@ liga_stavok_cookies = None
 
 
 def handler(event, context):
-    """Получение матчей настольного тенниса — RapidAPI Table Tennis или бесплатный парсинг"""
+    """Получение матчей настольного тенниса через AllSportsApi (RapidAPI)"""
     
     if event.get('httpMethod') == 'OPTIONS':
         return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': ''}
     
     api_key = os.environ.get('RAPID_API_KEY', '')
     
-    print(f'RAPID_API_KEY present: {bool(api_key)}')
+    print(f'[v2] RAPID_API_KEY present: {bool(api_key)}')
     
     if api_key:
-        print('Using RapidAPI Table Tennis (paid)')
+        print('[v2] Using AllSportsApi (paid)')
         return handle_paid_api(api_key)
     else:
-        print('Using free scraping (limited)')
+        print('[v2] Using free scraping (limited)')
         return handle_free_scraping()
 
 
