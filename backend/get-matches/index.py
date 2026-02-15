@@ -1,8 +1,10 @@
 import json
 import os
 import urllib.request
+import urllib.parse
 import ssl
 import re
+import http.cookiejar
 from datetime import datetime, timezone
 
 CORS_HEADERS = {
@@ -14,6 +16,8 @@ CORS_HEADERS = {
 }
 
 UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+
+liga_stavok_cookies = None
 
 
 def handler(event, context):
@@ -58,8 +62,19 @@ def handle_paid_api(api_key):
 
 
 def handle_free_scraping():
-    """Парсинг Flashscore + SofaScore"""
+    """Парсинг Liga Stavok с авторизацией"""
     all_events = []
+    
+    login = os.environ.get('LIGA_STAVOK_LOGIN', '')
+    password = os.environ.get('LIGA_STAVOK_PASSWORD', '')
+    
+    if login and password:
+        try:
+            liga_data = scrape_liga_stavok_auth(login, password)
+            all_events.extend(liga_data)
+            print(f'Liga Stavok: {len(liga_data)} events')
+        except Exception as e:
+            print(f'Liga Stavok error: {str(e)}')
     
     try:
         flashscore_data = scrape_flashscore()
@@ -78,16 +93,175 @@ def handle_free_scraping():
     filtered = [ev for ev in all_events if is_liga_pro_scraped(ev)]
     print(f'Filtered Liga Pro: {len(filtered)} events')
     
+    source = 'liga-stavok' if login and password else 'flashscore-sofascore'
+    
     return {
         'statusCode': 200,
         'headers': CORS_HEADERS,
         'body': json.dumps({
             'events': filtered,
             'total': len(filtered),
-            'source': 'flashscore-sofascore',
+            'source': source,
             'updatedAt': datetime.now(timezone.utc).isoformat()
         }, ensure_ascii=False)
     }
+
+
+def scrape_liga_stavok_auth(login, password):
+    """Парсинг Liga Stavok с авторизацией"""
+    global liga_stavok_cookies
+    events = []
+    
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    
+    if not liga_stavok_cookies:
+        try:
+            print('Авторизация на Liga Stavok...')
+            
+            cookie_jar = http.cookiejar.CookieJar()
+            opener = urllib.request.build_opener(
+                urllib.request.HTTPCookieProcessor(cookie_jar),
+                urllib.request.HTTPSHandler(context=ctx)
+            )
+            
+            auth_data = {
+                'login': login,
+                'password': password
+            }
+            
+            auth_url = 'https://ligastavok.ru/api/user/login'
+            headers = {
+                'User-Agent': UA,
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            }
+            
+            req = urllib.request.Request(
+                auth_url,
+                data=json.dumps(auth_data).encode('utf-8'),
+                headers=headers,
+                method='POST'
+            )
+            
+            resp = opener.open(req, timeout=10)
+            auth_result = json.loads(resp.read().decode('utf-8'))
+            
+            print(f'Авторизация: {auth_result.get("success", False)}')
+            
+            cookies_str = '; '.join([f'{cookie.name}={cookie.value}' for cookie in cookie_jar])
+            liga_stavok_cookies = cookies_str
+            
+        except Exception as e:
+            print(f'Ошибка авторизации: {str(e)}')
+            return events
+    
+    try:
+        headers = {
+            'User-Agent': UA,
+            'Accept': 'application/json',
+            'Cookie': liga_stavok_cookies,
+            'Referer': 'https://ligastavok.ru/'
+        }
+        
+        url = 'https://ligastavok.ru/api/sport/live?sportId=12'
+        req = urllib.request.Request(url, headers=headers)
+        
+        with urllib.request.urlopen(req, timeout=10, context=ctx) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+            
+            if isinstance(data, dict) and 'data' in data:
+                for game in data['data'].get('games', []):
+                    ev = convert_ligastavok_event(game, 'LIVE')
+                    if ev:
+                        events.append(ev)
+        
+        print(f'Liga Stavok live: {len(events)} матчей')
+    except Exception as e:
+        print(f'Liga Stavok live error: {str(e)}')
+    
+    try:
+        headers = {
+            'User-Agent': UA,
+            'Accept': 'application/json',
+            'Cookie': liga_stavok_cookies,
+            'Referer': 'https://ligastavok.ru/'
+        }
+        
+        url = 'https://ligastavok.ru/api/sport/line?sportId=12'
+        req = urllib.request.Request(url, headers=headers)
+        
+        with urllib.request.urlopen(req, timeout=10, context=ctx) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+            
+            if isinstance(data, dict) and 'data' in data:
+                for game in data['data'].get('games', []):
+                    ev = convert_ligastavok_event(game, 'scheduled')
+                    if ev:
+                        events.append(ev)
+        
+        print(f'Liga Stavok line: {len(events)} всего')
+    except Exception as e:
+        print(f'Liga Stavok line error: {str(e)}')
+    
+    return events
+
+
+def convert_ligastavok_event(game, status):
+    """Конвертация Liga Stavok события"""
+    try:
+        game_name = game.get('name', '')
+        
+        match = re.match(r'(.+?)\s*[-–—]\s*(.+)', game_name)
+        if not match:
+            return None
+        
+        player1 = match.group(1).strip()
+        player2 = match.group(2).strip()
+        
+        if not player1 or not player2:
+            return None
+        
+        league_name = game.get('championat', {}).get('name', 'Table Tennis')
+        
+        score1 = game.get('score', {}).get('score1', 0)
+        score2 = game.get('score', {}).get('score2', 0)
+        
+        game_id = str(game.get('id', ''))
+        start_time = game.get('kickoff')
+        
+        if start_time:
+            dt = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
+        else:
+            dt = datetime.now(timezone.utc)
+        
+        return {
+            'id': f'ls_{game_id}',
+            'date': dt.isoformat(),
+            'status': status,
+            'league': {
+                'name': league_name,
+                'country': 'Russia'
+            },
+            'teams': {
+                'home': {
+                    'id': player1,
+                    'name': player1
+                },
+                'away': {
+                    'id': player2,
+                    'name': player2
+                }
+            },
+            'scores': {
+                'home': score1,
+                'away': score2
+            }
+        }
+    except Exception as e:
+        print(f'Error converting event: {str(e)}')
+        return None
 
 
 def scrape_flashscore():
