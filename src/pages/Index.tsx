@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import Sidebar from '@/components/Sidebar';
 import StatsBar from '@/components/StatsBar';
 import MatchCard from '@/components/MatchCard';
@@ -9,21 +9,47 @@ import TelegramButton from '@/components/TelegramButton';
 import { Card } from '@/components/ui/card';
 import Icon from '@/components/ui/icon';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { filterMatches, calcStats } from '@/data/matches';
-import type { MatchFilters } from '@/data/matches';
+import type { MatchFilters, PredictionStats } from '@/data/matches';
 import { useMatches } from '@/hooks/use-matches';
+import { useStats, useSavePredictions } from '@/hooks/use-stats';
 
 export default function Index() {
   const [activeTab, setActiveTab] = useState('predictions');
   const [filters, setFilters] = useState<MatchFilters>({ status: 'all' });
+  const [statsPeriod, setStatsPeriod] = useState('week');
   const { data, isLoading, error, dataUpdatedAt } = useMatches();
+  const { data: dbStats } = useStats(statsPeriod);
+  const savePredictions = useSavePredictions();
 
   const matches = data?.matches ?? [];
   const leagues = data?.leagues ?? [];
-  const stats = useMemo(() => calcStats(matches), [matches]);
+
+  const stats: PredictionStats = useMemo(() => {
+    if (dbStats && dbStats.total > 0) {
+      return {
+        totalPredictions: dbStats.total,
+        correctPredictions: dbStats.correct,
+        winRate: dbStats.winRate,
+        streak: dbStats.streak,
+        todayPredictions: dbStats.total,
+        todayCorrect: dbStats.correct,
+        roi: dbStats.roi,
+        avgOdds: dbStats.avgOdds,
+      };
+    }
+    return calcStats(matches);
+  }, [dbStats, matches]);
 
   const liveCount = data?.liveCount ?? 0;
   const highConfCount = data?.highConfCount ?? 0;
+
+  useEffect(() => {
+    if (matches.length > 0 && !savePredictions.isPending) {
+      savePredictions.mutate(matches);
+    }
+  }, [matches]);
 
   const filteredMatches = useMemo(() => {
     if (activeTab === 'predictions') {
@@ -166,9 +192,24 @@ export default function Index() {
       case 'stats':
         return (
           <div className="space-y-4 animate-fade-in">
-            <div className="flex items-center gap-2 mb-2">
-              <Icon name="PieChart" size={20} className="text-primary" />
-              <h2 className="text-lg font-bold text-foreground">Подробная статистика</h2>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <Icon name="PieChart" size={20} className="text-primary" />
+                <h2 className="text-lg font-bold text-foreground">Подробная статистика</h2>
+              </div>
+              <div className="flex items-center gap-1">
+                {['today', 'week', 'month', 'all'].map((p) => (
+                  <Button
+                    key={p}
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setStatsPeriod(p)}
+                    className={statsPeriod === p ? 'bg-primary/15 text-primary' : 'text-muted-foreground'}
+                  >
+                    {p === 'today' ? 'День' : p === 'week' ? 'Неделя' : p === 'month' ? 'Месяц' : 'Всё'}
+                  </Button>
+                ))}
+              </div>
             </div>
 
             <StatsBar stats={stats} />

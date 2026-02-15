@@ -1,0 +1,15 @@
+{
+  "tests": [
+    {
+      "name": "Get stats returns structure",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 200,
+      "expectedBody": {
+        "period": "string",
+        "total": "number"
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}

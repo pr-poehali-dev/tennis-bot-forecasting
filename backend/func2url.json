@@ -1,4 +1,6 @@
 {
+  "save-predictions": "https://functions.poehali.dev/f86ca3f7-b78d-4322-b841-1a95fc652f05",
+  "get-stats": "https://functions.poehali.dev/f77f3d82-2bdf-4aa6-8b2e-d8d33e745a37",
   "tg-send": "https://functions.poehali.dev/2e6fdee9-bf8a-4481-aeeb-09115fd7c6da",
   "get-matches": "https://functions.poehali.dev/6a9f6c04-269b-4b4b-9151-6645433dba77"
 }
