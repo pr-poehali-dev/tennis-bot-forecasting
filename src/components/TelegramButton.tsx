@@ -22,11 +22,17 @@ export default function TelegramButton({ mode, className }: TelegramButtonProps)
         body: JSON.stringify({ mode }),
       });
       const data = await res.json();
-      setStatus(data.success ? 'success' : 'error');
+      if (data.success) {
+        setStatus('success');
+      } else if (data.error?.includes('не настроен')) {
+        setStatus('error');
+      } else {
+        setStatus('error');
+      }
     } catch {
       setStatus('error');
     }
-    setTimeout(() => setStatus('idle'), 3000);
+    setTimeout(() => setStatus('idle'), 4000);
   };
 
   const label = {

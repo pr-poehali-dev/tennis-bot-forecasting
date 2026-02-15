@@ -21,6 +21,7 @@ export interface Match {
     winner: 'p1' | 'p2';
     confidence: number;
     factors: string[];
+    betType?: 'strong' | 'medium' | 'risky' | 'skip';
   };
 }
 
@@ -40,6 +41,8 @@ export interface MatchFilters {
   maxOdds?: number;
   minConfidence?: number;
   status?: 'all' | 'upcoming' | 'live' | 'finished';
+  league?: string;
+  betType?: string;
 }
 
 const API_URL = 'https://functions.poehali.dev/6a9f6c04-269b-4b4b-9151-6645433dba77';
@@ -49,6 +52,10 @@ export interface ApiResponse {
   updatedAt: string;
   source: string;
   count: number;
+  liveCount: number;
+  upcomingCount: number;
+  highConfCount: number;
+  leagues: string[];
 }
 
 export async function fetchMatches(): Promise<ApiResponse> {
@@ -60,6 +67,7 @@ export async function fetchMatches(): Promise<ApiResponse> {
 export function filterMatches(matches: Match[], filters: MatchFilters): Match[] {
   return matches.filter((m) => {
     if (filters.status && filters.status !== 'all' && m.status !== filters.status) return false;
+    if (filters.league && m.league !== filters.league) return false;
     if (filters.minOdds) {
       const minOdd = Math.min(m.odds.p1Win, m.odds.p2Win);
       if (minOdd < filters.minOdds) return false;
@@ -71,12 +79,15 @@ export function filterMatches(matches: Match[], filters: MatchFilters): Match[] 
     if (filters.minConfidence && m.prediction) {
       if (m.prediction.confidence < filters.minConfidence) return false;
     }
+    if (filters.betType && filters.betType !== 'all' && m.prediction) {
+      if (m.prediction.betType !== filters.betType) return false;
+    }
     return true;
   });
 }
 
 export function calcStats(matches: Match[]): PredictionStats {
-  const finished = matches.filter((m) => m.status === 'finished' && m.prediction);
+  const finished = matches.filter((m) => m.status === 'finished' && m.prediction && m.score);
   const total = finished.length || 1;
   let correct = 0;
   let streak = 0;

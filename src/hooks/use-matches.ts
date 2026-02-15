@@ -5,7 +5,7 @@ export function useMatches() {
   return useQuery({
     queryKey: ['matches'],
     queryFn: fetchMatches,
-    refetchInterval: 30000,
-    staleTime: 15000,
+    refetchInterval: 15000,
+    staleTime: 10000,
   });
 }

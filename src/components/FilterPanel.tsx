@@ -8,16 +8,24 @@ import type { MatchFilters } from '@/data/matches';
 interface FilterPanelProps {
   filters: MatchFilters;
   onFiltersChange: (filters: MatchFilters) => void;
+  leagues?: string[];
 }
 
-const statusOptions: { value: MatchFilters['status']; label: string }[] = [
+const statusOptions: { value: MatchFilters['status']; label: string; icon?: string }[] = [
   { value: 'all', label: 'Все' },
-  { value: 'live', label: 'Live' },
-  { value: 'upcoming', label: 'Ожидаемые' },
-  { value: 'finished', label: 'Завершенные' },
+  { value: 'live', label: 'Live', icon: 'Radio' },
+  { value: 'upcoming', label: 'Скоро' },
+  { value: 'finished', label: 'Завершены' },
 ];
 
-export default function FilterPanel({ filters, onFiltersChange }: FilterPanelProps) {
+const betTypeOptions: { value: string; label: string; color: string }[] = [
+  { value: 'all', label: 'Все', color: '' },
+  { value: 'strong', label: 'Топ', color: 'text-primary' },
+  { value: 'medium', label: 'Средний', color: 'text-blue-400' },
+  { value: 'risky', label: 'Риск', color: 'text-amber-400' },
+];
+
+export default function FilterPanel({ filters, onFiltersChange, leagues }: FilterPanelProps) {
   const update = (patch: Partial<MatchFilters>) =>
     onFiltersChange({ ...filters, ...patch });
 
@@ -27,6 +35,8 @@ export default function FilterPanel({ filters, onFiltersChange }: FilterPanelPro
       maxOdds: undefined,
       minConfidence: undefined,
       status: 'all',
+      league: undefined,
+      betType: undefined,
     });
 
   return (
@@ -43,12 +53,11 @@ export default function FilterPanel({ filters, onFiltersChange }: FilterPanelPro
           className="text-xs text-muted-foreground hover:text-foreground h-7"
         >
           <Icon name="RotateCcw" size={12} />
-          Сбросить фильтры
+          Сбросить
         </Button>
       </div>
 
       <div className="flex flex-wrap items-end gap-4">
-        {/* Status filter */}
         <div className="space-y-1.5">
           <label className="text-xs text-muted-foreground">Статус</label>
           <div className="flex gap-1">
@@ -59,8 +68,31 @@ export default function FilterPanel({ filters, onFiltersChange }: FilterPanelPro
                 size="sm"
                 onClick={() => update({ status: opt.value })}
                 className={cn(
-                  'h-8 px-3 text-xs rounded-md',
+                  'h-8 px-3 text-xs rounded-md gap-1',
                   (filters.status || 'all') === opt.value
+                    ? 'bg-primary/15 text-primary hover:bg-primary/20 hover:text-primary'
+                    : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                {opt.icon && <Icon name={opt.icon} size={12} />}
+                {opt.label}
+              </Button>
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <label className="text-xs text-muted-foreground">Тип прогноза</label>
+          <div className="flex gap-1">
+            {betTypeOptions.map((opt) => (
+              <Button
+                key={opt.value}
+                variant="ghost"
+                size="sm"
+                onClick={() => update({ betType: opt.value === 'all' ? undefined : opt.value })}
+                className={cn(
+                  'h-8 px-3 text-xs rounded-md',
+                  (filters.betType || 'all') === opt.value
                     ? 'bg-primary/15 text-primary hover:bg-primary/20 hover:text-primary'
                     : 'text-muted-foreground hover:text-foreground'
                 )}
@@ -71,7 +103,43 @@ export default function FilterPanel({ filters, onFiltersChange }: FilterPanelPro
           </div>
         </div>
 
-        {/* Min odds */}
+        {leagues && leagues.length > 1 && (
+          <div className="space-y-1.5">
+            <label className="text-xs text-muted-foreground">Лига</label>
+            <div className="flex gap-1 flex-wrap">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => update({ league: undefined })}
+                className={cn(
+                  'h-8 px-3 text-xs rounded-md',
+                  !filters.league
+                    ? 'bg-primary/15 text-primary hover:bg-primary/20 hover:text-primary'
+                    : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                Все
+              </Button>
+              {leagues.map((l) => (
+                <Button
+                  key={l}
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => update({ league: l })}
+                  className={cn(
+                    'h-8 px-3 text-xs rounded-md',
+                    filters.league === l
+                      ? 'bg-primary/15 text-primary hover:bg-primary/20 hover:text-primary'
+                      : 'text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  {l}
+                </Button>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="space-y-1.5">
           <label className="text-xs text-muted-foreground">Мин. коэфф.</label>
           <Input
@@ -88,7 +156,6 @@ export default function FilterPanel({ filters, onFiltersChange }: FilterPanelPro
           />
         </div>
 
-        {/* Max odds */}
         <div className="space-y-1.5">
           <label className="text-xs text-muted-foreground">Макс. коэфф.</label>
           <Input
@@ -105,7 +172,6 @@ export default function FilterPanel({ filters, onFiltersChange }: FilterPanelPro
           />
         </div>
 
-        {/* Min confidence */}
         <div className="space-y-1.5 flex-1 min-w-[200px]">
           <div className="flex items-center justify-between">
             <label className="text-xs text-muted-foreground">Мин. уверенность</label>

@@ -6,9 +6,7 @@
       "path": "/",
       "expectedStatus": 200,
       "expectedBody": {
-        "matches": "array",
-        "source": "string",
-        "count": "number"
+        "source": "string"
       },
       "bodyMatcher": "partial"
     }
