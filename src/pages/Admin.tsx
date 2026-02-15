@@ -18,6 +18,7 @@ export default function Admin() {
   const [matches, setMatches] = useState<ManualMatch[]>([]);
   const [importCount, setImportCount] = useState(0);
   const [hasImportData, setHasImportData] = useState(false);
+  const [importText, setImportText] = useState('');
   
   useEffect(() => {
     const stored = localStorage.getItem('manual_matches');
@@ -53,6 +54,33 @@ export default function Admin() {
     } else {
       setHasImportData(false);
       setImportCount(0);
+    }
+  };
+  
+  const importFromText = () => {
+    if (!importText.trim()) {
+      alert('Вставь данные матчей в текстовое поле');
+      return;
+    }
+    
+    try {
+      const data = JSON.parse(importText) as Array<{ player1: string; player2: string }>;
+      const newMatches = data.map(d => ({
+        id: Date.now().toString() + Math.random().toString(36),
+        player1: d.player1,
+        player2: d.player2,
+        league: 'Лига Про Россия',
+        status: 'upcoming' as const
+      }));
+      
+      const updated = [...matches, ...newMatches];
+      setMatches(updated);
+      localStorage.setItem('manual_matches', JSON.stringify(updated));
+      setImportText('');
+      
+      alert(`✅ Импортировано ${newMatches.length} матчей!`);
+    } catch (e) {
+      alert('Ошибка импорта. Проверь формат данных: ' + e);
     }
   };
   
@@ -301,61 +329,45 @@ export default function Admin() {
           </h2>
 
           <div className="bg-primary/5 border border-primary/20 rounded-lg p-4 mb-4">
-            <h3 className="font-semibold text-sm mb-2">🔖 Букмарклет для быстрого импорта</h3>
+            <h3 className="font-semibold text-sm mb-2 flex items-center gap-2">
+              <span>🔖</span>
+              <span>Букмарклет для быстрого импорта</span>
+            </h3>
             <p className="text-xs text-muted-foreground mb-3">
-              Перетащи эту кнопку на панель закладок браузера, затем запусти её на странице Liga Stavok
+              Перетащи кнопку на панель закладок, затем запусти на странице Liga Stavok
             </p>
-            <div className="bg-background rounded-lg p-3 border border-border">
+            <div className="bg-background rounded-lg p-3 border border-border mb-2">
               <a
-                href={`javascript:(function(){console.log('TT Predict Parser started');const m=[];const patterns=[/([А-Яа-я\\s\\.\\-]+[А-Яа-я])\\s*[-–—vs\\.]+\\s*([А-Яа-я\\s\\.\\-]+[А-Яа-я])/gi,/([A-Za-z\\s\\.\\-]+[A-Za-z])\\s*[-–—vs\\.]+\\s*([A-Za-z\\s\\.\\-]+[A-Za-z])/gi];document.querySelectorAll('*').forEach(e=>{const t=(e.textContent||'').trim();if(t.length>10&&t.length<200){patterns.forEach(p=>{if(p.test(t)){const s=t.split(/[-–—vs\\.]/);if(s.length===2){const p1=s[0].trim(),p2=s[1].trim();if(p1.length>3&&p2.length>3&&p1.length<50&&p2.length<50&&p1!==p2){m.push({player1:p1,player2:p2})}}}p.lastIndex=0})}});const u=[];const n=new Set();m.forEach(x=>{const k=x.player1.toLowerCase()+'|'+x.player2.toLowerCase();if(!n.has(k)){n.add(k);u.push(x)}});console.log('Matches found:',u);if(u.length>0){try{localStorage.setItem('liga_stavok_import',JSON.stringify(u));const saved=localStorage.getItem('liga_stavok_import');if(saved){console.log('Saved to localStorage successfully');const d=document.createElement('div');d.style.cssText='position:fixed;top:20px;right:20px;background:#22c55e;color:white;padding:20px;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.3);z-index:999999;font-family:system-ui;min-width:300px';d.innerHTML='<div style="font-size:18px;font-weight:bold;margin-bottom:8px">✅ Найдено '+u.length+' матчей!</div><div style="font-size:14px;opacity:0.9;margin-bottom:12px">Данные сохранены. Переходи в админку.</div><button onclick="window.open(\\'/admin\\',\\'_blank\\');this.parentElement.remove()" style="background:white;color:#22c55e;border:none;padding:8px 16px;border-radius:6px;font-weight:600;cursor:pointer">Открыть админку</button>';document.body.appendChild(d);setTimeout(()=>d.remove(),15000)}else{alert('Ошибка сохранения в localStorage')}}catch(e){alert('Ошибка: '+e.message)}}else{alert('❌ Матчи не найдены.\\n\\nПроверь что ты на странице с настольным теннисом')}})();`}
+                href={`javascript:(function(){console.log('🏓 TT Predict Parser');const m=[];const patterns=[/([А-Яа-я\\s\\.\\-]+[А-Яа-я])\\s*[-–—vs\\.]+\\s*([А-Яа-я\\s\\.\\-]+[А-Яа-я])/gi,/([A-Za-z\\s\\.\\-]+[A-Za-z])\\s*[-–—vs\\.]+\\s*([A-Za-z\\s\\.\\-]+[A-Za-z])/gi];document.querySelectorAll('*').forEach(e=>{const t=(e.textContent||'').trim();if(t.length>10&&t.length<200){patterns.forEach(p=>{if(p.test(t)){const s=t.split(/[-–—vs\\.]/);if(s.length===2){const p1=s[0].trim(),p2=s[1].trim();if(p1.length>3&&p2.length>3&&p1.length<50&&p2.length<50&&p1!==p2){m.push({player1:p1,player2:p2})}}}p.lastIndex=0})}});const u=[];const n=new Set();m.forEach(x=>{const k=x.player1.toLowerCase()+'|'+x.player2.toLowerCase();if(!n.has(k)){n.add(k);u.push(x)}});console.log('Found:',u.length,'matches');if(u.length>0){const json=JSON.stringify(u);navigator.clipboard.writeText(json).then(()=>{const d=document.createElement('div');d.style.cssText='position:fixed;top:20px;right:20px;background:#22c55e;color:white;padding:20px;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.3);z-index:999999;font-family:system-ui;min-width:320px';d.innerHTML='<div style="font-size:18px;font-weight:bold;margin-bottom:8px">✅ Найдено '+u.length+' матчей!</div><div style="font-size:14px;opacity:0.9;margin-bottom:12px">Данные скопированы в буфер обмена.<br>Вставь их в админке (Ctrl+V)</div><button onclick="window.open(\\'/admin\\',\\'_blank\\');this.parentElement.remove()" style="background:white;color:#22c55e;border:none;padding:8px 16px;border-radius:6px;font-weight:600;cursor:pointer;width:100%">Открыть админку</button>';document.body.appendChild(d);setTimeout(()=>d.remove(),15000)}).catch(()=>{prompt('Скопируй эти данные и вставь в админке:',json)})}else{alert('❌ Матчи не найдены\\n\\nПроверь что ты на странице с настольным теннисом')}})();`}
                 className="text-xs font-mono bg-primary text-primary-foreground px-3 py-2 rounded inline-flex items-center gap-2 hover:opacity-80 transition-opacity cursor-move"
-                onClick={(e) => { e.preventDefault(); alert('💡 Инструкция:\n\n1. Зажми эту кнопку левой кнопкой мыши\n2. Перетащи её на панель закладок браузера (верхняя часть окна)\n3. Открой ligastavok.ru → Настольный теннис\n4. Нажми на эту закладку\n5. Вернись сюда и нажми "Импортировать"'); }}
+                onClick={(e) => { e.preventDefault(); alert('💡 Инструкция:\n\n1. Зажми и перетащи эту кнопку на панель закладок\n2. Открой ligastavok.ru → Настольный теннис\n3. Нажми на закладку\n4. Данные скопируются в буфер обмена\n5. Вернись сюда и вставь (Ctrl+V) в поле ниже'); }}
               >
                 📊 Импорт из Liga Stavok
               </a>
             </div>
-            <p className="text-xs text-muted-foreground mt-2">
-              После запуска букмарклета матчи автоматически появятся ниже
+            <p className="text-xs text-amber-400 font-medium">
+              После запуска данные скопируются в буфер обмена — вставь их ниже
             </p>
           </div>
 
-          {hasImportData && importCount > 0 && (
-            <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4 mb-4 animate-pulse">
-              <div className="flex items-center gap-3">
-                <div className="bg-green-500 rounded-full p-2">
-                  <Icon name="Check" size={20} className="text-white" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="font-bold text-green-400">Готово к импорту!</h3>
-                  <p className="text-xs text-muted-foreground">Найдено {importCount} матчей из Liga Stavok</p>
-                </div>
-              </div>
-            </div>
-          )}
-          
-          <div className="flex gap-2">
-            <Button 
-              onClick={importFromLigaStavok}
-              className="flex-1"
-              disabled={!hasImportData}
-            >
-              <Icon name="Download" size={16} />
-              Импортировать {importCount > 0 ? `(${importCount})` : ''}
-            </Button>
-            <Button 
-              onClick={checkImportData}
-              variant="outline"
-              size="sm"
-            >
-              <Icon name="RefreshCw" size={16} />
-            </Button>
+          <div className="space-y-2 mb-4">
+            <label className="text-sm font-medium">Данные из букмарклета</label>
+            <textarea
+              value={importText}
+              onChange={(e) => setImportText(e.target.value)}
+              placeholder='Вставь сюда данные из буфера обмена (Ctrl+V)\nДолжно выглядеть так: [{"player1":"Ivanov A.","player2":"Petrov D."}]'
+              className="w-full h-32 px-3 py-2 rounded-lg border border-border bg-background text-foreground font-mono text-xs resize-none"
+            />
           </div>
-          
-          {!hasImportData && (
-            <p className="text-xs text-muted-foreground text-center mt-3">
-              Запусти букмарклет на странице Liga Stavok, затем вернись сюда
-            </p>
-          )}
+
+          <Button 
+            onClick={importFromText}
+            className="w-full"
+            disabled={!importText.trim()}
+          >
+            <Icon name="Download" size={16} />
+            Импортировать матчи
+          </Button>
         </Card>
 
         <Card className="p-4 border-amber-500/30 bg-amber-500/5">
@@ -364,11 +376,12 @@ export default function Admin() {
             <div className="text-sm text-muted-foreground">
               <p className="font-medium text-amber-500 mb-1">Инструкция:</p>
               <ol className="list-decimal list-inside space-y-1 text-xs">
+                <li>Перетащи букмарклет (зелёную кнопку выше) на панель закладок</li>
                 <li>Открой ligastavok.ru → Настольный теннис → Лига Про</li>
-                <li>Запусти букмарклет (кнопка в закладках)</li>
-                <li>Вернись сюда и нажми "Импортировать найденные матчи"</li>
-                <li>Матчи появятся на главной странице</li>
-                <li className="text-green-400 font-medium">Live счёт обновляется автоматически каждые 10 сек</li>
+                <li>Нажми на закладку — данные скопируются в буфер обмена</li>
+                <li>Вернись сюда и вставь данные (Ctrl+V) в текстовое поле</li>
+                <li>Нажми "Импортировать матчи"</li>
+                <li className="text-green-400 font-medium mt-1">✨ Live счёт обновляется автоматически каждые 10 сек!</li>
               </ol>
             </div>
           </div>
