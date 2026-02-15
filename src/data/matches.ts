@@ -278,32 +278,96 @@ function generateDemoMatches(): Match[] {
   return matches;
 }
 
-export async function fetchMatches(): Promise<ApiResponse> {
-  const allMatches: Match[] = [];
-  
+const API_BACKEND = 'https://functions.poehali.dev/6a9f6c04-269b-4b4b-9151-6645433dba77';
+
+function parseApiSportsEvent(ev: Record<string, unknown>): Match | null {
   try {
-    const live = await fetchJSON(SOFASCORE_LIVE) as { events?: Record<string, unknown>[] } | null;
-    if (live?.events && Array.isArray(live.events)) {
-      for (const ev of live.events) {
-        if (isLigaPro(ev)) {
-          const m = parseEvent(ev);
-          if (m) allMatches.push(m);
-        }
-      }
+    const teams = (ev.teams as Record<string, Record<string, unknown>>) || {};
+    const home = teams.home || {};
+    const away = teams.away || {};
+    const p1n = String(home.name || '');
+    const p2n = String(away.name || '');
+    if (!p1n || !p2n) return null;
+    
+    const status_str = String(ev.status || 'scheduled');
+    let status: 'live' | 'upcoming' | 'finished' = 'upcoming';
+    if (status_str === 'LIVE' || status_str === 'inprogress') status = 'live';
+    else if (status_str === 'FT' || status_str === 'finished') status = 'finished';
+    
+    const r1 = rating(p1n), r2 = rating(p2n);
+    
+    const league = (ev.league as Record<string, unknown>) || {};
+    const leagueName = String(league.name || 'Table Tennis');
+    
+    const match: Match = {
+      id: String(ev.id),
+      player1: { id: String(home.id || p1n), name: p1n, rating: r1, winRate: winrate(r1), recentForm: form(p1n), country: 'RU' },
+      player2: { id: String(away.id || p2n), name: p2n, rating: r2, winRate: winrate(r2), recentForm: form(p2n), country: 'RU' },
+      startTime: String(ev.date || new Date().toISOString()),
+      status,
+      odds: odds(r1, r2),
+      league: leagueName
+    };
+    
+    const scores = (ev.scores as Record<string, unknown>) || {};
+    const homeScore = Number(scores.home) || 0;
+    const awayScore = Number(scores.away) || 0;
+    
+    if (status !== 'upcoming' && (homeScore > 0 || awayScore > 0)) {
+      match.score = { p1: homeScore, p2: awayScore };
     }
     
-    const today = new Date().toISOString().split('T')[0];
-    const sched = await fetchJSON(`${SOFASCORE_SCHEDULED}/${today}`) as { events?: Record<string, unknown>[] } | null;
-    if (sched?.events && Array.isArray(sched.events)) {
-      for (const ev of sched.events) {
-        if (isLigaPro(ev)) {
-          const m = parseEvent(ev);
-          if (m) allMatches.push(m);
-        }
+    match.prediction = predict(match);
+    return match;
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchMatches(): Promise<ApiResponse> {
+  const allMatches: Match[] = [];
+  let source = 'demo';
+  
+  try {
+    const apiData = await fetchJSON(API_BACKEND) as { events?: Record<string, unknown>[]; source?: string } | null;
+    if (apiData?.events && Array.isArray(apiData.events)) {
+      for (const ev of apiData.events) {
+        const m = parseApiSportsEvent(ev);
+        if (m) allMatches.push(m);
+      }
+      if (allMatches.length > 0) {
+        source = apiData.source || 'live';
       }
     }
   } catch (e) {
-    console.warn('SofaScore API blocked, using demo data', e);
+    console.warn('API backend failed, trying SofaScore fallback', e);
+    
+    try {
+      const live = await fetchJSON(SOFASCORE_LIVE) as { events?: Record<string, unknown>[] } | null;
+      if (live?.events && Array.isArray(live.events)) {
+        for (const ev of live.events) {
+          if (isLigaPro(ev)) {
+            const m = parseEvent(ev);
+            if (m) allMatches.push(m);
+          }
+        }
+      }
+      
+      const today = new Date().toISOString().split('T')[0];
+      const sched = await fetchJSON(`${SOFASCORE_SCHEDULED}/${today}`) as { events?: Record<string, unknown>[] } | null;
+      if (sched?.events && Array.isArray(sched.events)) {
+        for (const ev of sched.events) {
+          if (isLigaPro(ev)) {
+            const m = parseEvent(ev);
+            if (m) allMatches.push(m);
+          }
+        }
+      }
+      
+      if (allMatches.length > 0) source = 'live';
+    } catch (e2) {
+      console.warn('SofaScore also blocked', e2);
+    }
   }
   
   if (allMatches.length === 0) {
@@ -326,7 +390,7 @@ export async function fetchMatches(): Promise<ApiResponse> {
   return {
     matches: allMatches,
     updatedAt: new Date().toISOString(),
-    source: allMatches.length > 10 ? 'live' : 'demo',
+    source,
     count: allMatches.length,
     liveCount,
     upcomingCount,

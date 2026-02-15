@@ -317,13 +317,18 @@ export default function Index() {
               <h1 className="text-lg font-bold text-foreground">TT Predict</h1>
             </div>
             <div className="flex items-center gap-2 ml-auto">
-              {data?.source === 'live' && (
+              {data?.source === 'api-sports' && (
                 <Badge className="bg-primary/15 text-primary border-primary/30 gap-1">
                   <span className="relative flex h-1.5 w-1.5">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75" />
                     <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-primary" />
                   </span>
                   Live API
+                </Badge>
+              )}
+              {data?.source === 'live' && (
+                <Badge className="bg-green-500/15 text-green-400 border-green-500/30 gap-1 text-xs">
+                  SofaScore
                 </Badge>
               )}
               {data?.source === 'demo' && (
