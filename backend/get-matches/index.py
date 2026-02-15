@@ -21,33 +21,40 @@ liga_stavok_cookies = None
 
 
 def handler(event, context):
-    """Получение матчей настольного тенниса — платный API или бесплатный парсинг"""
+    """Получение матчей настольного тенниса — RapidAPI Table Tennis или бесплатный парсинг"""
     
     if event.get('httpMethod') == 'OPTIONS':
         return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': ''}
     
     api_key = os.environ.get('RAPID_API_KEY', '')
     
+    print(f'RAPID_API_KEY present: {bool(api_key)}')
+    
     if api_key:
+        print('Using RapidAPI Table Tennis (paid)')
         return handle_paid_api(api_key)
     else:
+        print('Using free scraping (limited)')
         return handle_free_scraping()
 
 
 def handle_paid_api(api_key):
-    """Платный API RapidAPI"""
+    """Платный API — API-Sports Table Tennis через RapidAPI"""
     all_events = []
     
-    live_events = fetch_api(api_key, 'https://table-tennis.api-sports.io/games', {'live': 'all'})
+    live_events = fetch_api_sports(api_key, '/games', {'live': 'all'})
     if live_events and 'response' in live_events:
         all_events.extend(live_events['response'])
+        print(f'API-Sports live: {len(live_events["response"])} events')
     
     today = datetime.now(timezone.utc).strftime('%Y-%m-%d')
-    scheduled = fetch_api(api_key, 'https://table-tennis.api-sports.io/games', {'date': today})
+    scheduled = fetch_api_sports(api_key, '/games', {'date': today})
     if scheduled and 'response' in scheduled:
         all_events.extend(scheduled['response'])
+        print(f'API-Sports scheduled: {len(scheduled["response"])} events')
     
     filtered = [ev for ev in all_events if is_liga_pro_api(ev)]
+    print(f'Filtered Liga Pro: {len(filtered)} events')
     
     return {
         'statusCode': 200,
@@ -421,23 +428,31 @@ def convert_sofascore_event(ev):
     }
 
 
-def fetch_api(api_key, url, params=None):
-    """RapidAPI запрос"""
+def fetch_api_sports(api_key, endpoint, params=None):
+    """API-Sports Table Tennis через RapidAPI"""
     try:
+        base_url = 'https://api-football-v1.p.rapidapi.com'
+        url = f'{base_url}{endpoint}'
+        
         if params:
             query = '&'.join([f'{k}={v}' for k, v in params.items()])
             url = f'{url}?{query}'
         
         headers = {
-            'x-rapidapi-key': api_key,
-            'x-rapidapi-host': 'table-tennis.api-sports.io'
+            'X-RapidAPI-Key': api_key,
+            'X-RapidAPI-Host': 'api-football-v1.p.rapidapi.com'
         }
         
+        print(f'API-Sports request: {endpoint} with params {params}')
+        
         req = urllib.request.Request(url, headers=headers)
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            return json.loads(resp.read().decode('utf-8'))
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+            results_count = data.get('results', 0) if isinstance(data.get('results'), int) else len(data.get('response', []))
+            print(f'API-Sports response: {results_count} results')
+            return data
     except Exception as e:
-        print(f'API error: {str(e)}')
+        print(f'API-Sports error: {str(e)}')
         return None
 
 
