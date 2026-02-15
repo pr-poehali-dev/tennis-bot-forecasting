@@ -329,45 +329,24 @@ export async function fetchMatches(): Promise<ApiResponse> {
   let source = 'demo';
   
   try {
-    const apiData = await fetchJSON(API_BACKEND) as { events?: Record<string, unknown>[]; source?: string } | null;
-    if (apiData?.events && Array.isArray(apiData.events)) {
-      for (const ev of apiData.events) {
-        const m = parseApiSportsEvent(ev);
-        if (m) allMatches.push(m);
+    const apiData = await fetchJSON(API_BACKEND) as { events?: Record<string, unknown>[]; source?: string; message?: string } | null;
+    
+    if (apiData) {
+      source = apiData.source || 'demo';
+      
+      if (apiData.events && Array.isArray(apiData.events) && apiData.events.length > 0) {
+        for (const ev of apiData.events) {
+          const m = parseApiSportsEvent(ev);
+          if (m) allMatches.push(m);
+        }
       }
-      if (allMatches.length > 0) {
-        source = apiData.source || 'live';
+      
+      if (apiData.message) {
+        console.info('Backend message:', apiData.message);
       }
     }
   } catch (e) {
-    console.warn('API backend failed, trying SofaScore fallback', e);
-    
-    try {
-      const live = await fetchJSON(SOFASCORE_LIVE) as { events?: Record<string, unknown>[] } | null;
-      if (live?.events && Array.isArray(live.events)) {
-        for (const ev of live.events) {
-          if (isLigaPro(ev)) {
-            const m = parseEvent(ev);
-            if (m) allMatches.push(m);
-          }
-        }
-      }
-      
-      const today = new Date().toISOString().split('T')[0];
-      const sched = await fetchJSON(`${SOFASCORE_SCHEDULED}/${today}`) as { events?: Record<string, unknown>[] } | null;
-      if (sched?.events && Array.isArray(sched.events)) {
-        for (const ev of sched.events) {
-          if (isLigaPro(ev)) {
-            const m = parseEvent(ev);
-            if (m) allMatches.push(m);
-          }
-        }
-      }
-      
-      if (allMatches.length > 0) source = 'live';
-    } catch (e2) {
-      console.warn('SofaScore also blocked', e2);
-    }
+    console.warn('API backend failed', e);
   }
   
   if (allMatches.length === 0) {

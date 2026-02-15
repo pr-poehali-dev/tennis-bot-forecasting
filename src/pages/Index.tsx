@@ -86,6 +86,28 @@ export default function Index() {
       case 'predictions':
         return (
           <div className="space-y-4 animate-fade-in">
+            {data?.source === 'demo' && (
+              <Card className="p-4 border-amber-500/30 bg-amber-500/5">
+                <div className="flex items-start gap-3">
+                  <Icon name="Info" size={20} className="text-amber-500 mt-0.5" />
+                  <div className="flex-1">
+                    <h3 className="text-sm font-semibold text-amber-500 mb-1">Demo режим</h3>
+                    <p className="text-xs text-muted-foreground mb-2">
+                      Для получения реальных матчей Liga Pro добавь API ключ RapidAPI в секреты проекта
+                    </p>
+                    <a 
+                      href="https://rapidapi.com/api-sports/api/table-tennis" 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-xs text-primary hover:underline"
+                    >
+                      Получить API ключ →
+                    </a>
+                  </div>
+                </div>
+              </Card>
+            )}
+            
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
               <Card className="p-3 border-border/50 flex items-center gap-2">
                 <div className="bg-red-500/10 p-2 rounded-lg">
