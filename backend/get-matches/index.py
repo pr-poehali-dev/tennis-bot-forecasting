@@ -21,44 +21,42 @@ liga_stavok_cookies = None
 
 
 def handler(event, context):
-    """Получение матчей настольного тенниса через AllSportsApi (RapidAPI)"""
+    """Получение матчей настольного тенниса через API-Football (RapidAPI)"""
     
     if event.get('httpMethod') == 'OPTIONS':
         return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': ''}
     
     api_key = os.environ.get('RAPID_API_KEY', '')
     
-    print(f'[v2] RAPID_API_KEY present: {bool(api_key)}')
+    print(f'[v3] RAPID_API_KEY present: {bool(api_key)}')
     
     if api_key:
-        print('[v2] Using AllSportsApi (paid)')
+        print('[v3] Using API-Football Table Tennis (paid)')
         return handle_paid_api(api_key)
     else:
-        print('[v2] Using free scraping (limited)')
+        print('[v3] Using free scraping (limited)')
         return handle_free_scraping()
 
 
 def handle_paid_api(api_key):
-    """Платный API — AllSportsApi через RapidAPI"""
+    """Платный API — API-Football (Table Tennis) через RapidAPI"""
     all_events = []
     
-    live_events = fetch_allsports(api_key, 'table-tennis', 'matches', {'status': 'inplay'})
-    if live_events and 'events' in live_events:
-        all_events.extend(live_events['events'])
-        print(f'AllSportsApi live: {len(live_events["events"])} events')
-    elif live_events and isinstance(live_events, list):
-        all_events.extend(live_events)
-        print(f'AllSportsApi live: {len(live_events)} events')
+    today = datetime.now(timezone.utc).strftime('%Y-%m-%d')
     
-    scheduled_events = fetch_allsports(api_key, 'table-tennis', 'matches', {'status': 'notstarted'})
-    if scheduled_events and 'events' in scheduled_events:
-        all_events.extend(scheduled_events['events'])
-        print(f'AllSportsApi scheduled: {len(scheduled_events["events"])} events')
-    elif scheduled_events and isinstance(scheduled_events, list):
-        all_events.extend(scheduled_events)
-        print(f'AllSportsApi scheduled: {len(scheduled_events)} events')
+    live_events = fetch_apifootball(api_key, '/games', {'live': 'all', 'timezone': 'Europe/Moscow'})
+    if live_events and 'response' in live_events:
+        all_events.extend(live_events['response'])
+        print(f'API-Football live: {len(live_events["response"])} events')
     
-    filtered = [ev for ev in all_events if is_liga_pro_allsports(ev)]
+    scheduled = fetch_apifootball(api_key, '/games', {'date': today, 'timezone': 'Europe/Moscow'})
+    if scheduled and 'response' in scheduled:
+        all_events.extend(scheduled['response'])
+        print(f'API-Football scheduled: {len(scheduled["response"])} events')
+    
+    print(f'Total events from API: {len(all_events)}')
+    
+    filtered = [ev for ev in all_events if is_liga_pro_apifootball(ev)]
     print(f'Filtered Liga Pro: {len(filtered)} events')
     
     return {
@@ -67,7 +65,7 @@ def handle_paid_api(api_key):
         'body': json.dumps({
             'events': filtered,
             'total': len(filtered),
-            'source': 'allsportsapi',
+            'source': 'api-football',
             'updatedAt': datetime.now(timezone.utc).isoformat()
         }, ensure_ascii=False)
     }
@@ -433,11 +431,11 @@ def convert_sofascore_event(ev):
     }
 
 
-def fetch_allsports(api_key, sport, endpoint, params=None):
-    """AllSportsApi через RapidAPI"""
+def fetch_apifootball(api_key, endpoint, params=None):
+    """API-Football Table Tennis через RapidAPI"""
     try:
-        base_url = 'https://allsportsapi2.p.rapidapi.com/api'
-        url = f'{base_url}/{sport}/{endpoint}'
+        base_url = 'https://api-football-v1.p.rapidapi.com/v3'
+        url = f'{base_url}{endpoint}'
         
         if params:
             query = '&'.join([f'{k}={v}' for k, v in params.items()])
@@ -445,35 +443,51 @@ def fetch_allsports(api_key, sport, endpoint, params=None):
         
         headers = {
             'X-RapidAPI-Key': api_key,
-            'X-RapidAPI-Host': 'allsportsapi2.p.rapidapi.com'
+            'X-RapidAPI-Host': 'api-football-v1.p.rapidapi.com'
         }
         
-        print(f'AllSportsApi request: {sport}/{endpoint}')
+        print(f'API-Football request: {endpoint} | params: {params}')
         
         req = urllib.request.Request(url, headers=headers)
         with urllib.request.urlopen(req, timeout=20) as resp:
             data = json.loads(resp.read().decode('utf-8'))
-            print(f'AllSportsApi response received')
+            
+            if 'response' in data:
+                print(f'API-Football response: {len(data["response"])} items')
+            else:
+                print(f'API-Football response: {data.keys()}')
+            
             return data
     except Exception as e:
-        print(f'AllSportsApi error: {str(e)}')
+        print(f'API-Football error: {str(e)}')
         return None
 
 
-def is_liga_pro_allsports(event):
-    """Проверка Liga Pro для AllSportsApi"""
+def is_liga_pro_apifootball(event):
+    """Проверка Liga Pro для API-Football"""
     try:
         league_name = ''
-        if isinstance(event, dict):
-            league_name = event.get('league', {}).get('name', '') if isinstance(event.get('league'), dict) else str(event.get('league', ''))
-            tournament = event.get('tournament', {})
-            if isinstance(tournament, dict):
-                league_name += ' ' + tournament.get('name', '')
         
-        league_name = league_name.lower()
-        keywords = ['liga pro', 'ligapro', 'setka cup', 'setka', 'tt cup', 'ttcup', 'masters', 'elite', 'win cup', 'wincup', 'challenge']
-        return any(kw in league_name for kw in keywords)
-    except:
+        if isinstance(event, dict):
+            league = event.get('league', {})
+            if isinstance(league, dict):
+                league_name = league.get('name', '').lower()
+            
+            country = event.get('country', {})
+            if isinstance(country, dict):
+                country_name = country.get('name', '').lower()
+                if 'russia' in country_name or 'belarus' in country_name:
+                    return True
+        
+        keywords = ['liga pro', 'ligapro', 'setka cup', 'setka', 'tt cup', 'ttcup', 'masters', 'elite', 'win cup', 'wincup', 'challenge', 'russia', 'belarus', 'minsk']
+        matched = any(kw in league_name for kw in keywords)
+        
+        if matched:
+            print(f'✓ Matched league: {league_name}')
+        
+        return matched
+    except Exception as e:
+        print(f'Filter error: {str(e)}')
         return False
 
 
