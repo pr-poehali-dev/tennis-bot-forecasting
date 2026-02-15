@@ -408,10 +408,6 @@ export async function fetchMatches(): Promise<ApiResponse> {
     console.warn('API backend failed', e);
   }
   
-  if (allMatches.length === 0) {
-    allMatches.push(...generateDemoMatches());
-  }
-  
   allMatches.sort((a, b) => {
     const so = { live: 0, upcoming: 1, finished: 2 };
     const ao = so[a.status as keyof typeof so] || 3;

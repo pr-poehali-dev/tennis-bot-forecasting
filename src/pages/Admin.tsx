@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,6 +16,17 @@ interface ManualMatch {
 
 export default function Admin() {
   const [matches, setMatches] = useState<ManualMatch[]>([]);
+  
+  useEffect(() => {
+    const stored = localStorage.getItem('manual_matches');
+    if (stored) {
+      try {
+        setMatches(JSON.parse(stored));
+      } catch (e) {
+        console.error('Failed to load matches', e);
+      }
+    }
+  }, []);
   const [p1, setP1] = useState('');
   const [p2, setP2] = useState('');
   const [league, setLeague] = useState('Лига Про Россия');
@@ -61,12 +72,20 @@ export default function Admin() {
   return (
     <div className="min-h-screen bg-background p-4 lg:p-6">
       <div className="max-w-4xl mx-auto space-y-6">
-        <div className="flex items-center gap-3">
-          <Icon name="Settings" size={28} className="text-primary" />
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">Админка</h1>
-            <p className="text-sm text-muted-foreground">Добавление матчей вручную</p>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Icon name="Settings" size={28} className="text-primary" />
+            <div>
+              <h1 className="text-2xl font-bold text-foreground">Админка</h1>
+              <p className="text-sm text-muted-foreground">Добавление матчей вручную</p>
+            </div>
           </div>
+          <a href="/">
+            <Button variant="outline">
+              <Icon name="ArrowLeft" size={16} />
+              Назад
+            </Button>
+          </a>
         </div>
 
         <Card className="p-6 border-border/50">

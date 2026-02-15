@@ -86,36 +86,6 @@ export default function Index() {
       case 'predictions':
         return (
           <div className="space-y-4 animate-fade-in">
-            {data?.source === 'demo' && (
-              <Card className="p-4 border-amber-500/30 bg-amber-500/5">
-                <div className="flex items-start gap-3">
-                  <Icon name="Info" size={20} className="text-amber-500 mt-0.5" />
-                  <div className="flex-1">
-                    <h3 className="text-sm font-semibold text-amber-500 mb-1">Demo режим</h3>
-                    <p className="text-xs text-muted-foreground mb-2">
-                      Для реальных матчей: добавь вручную через админку или подключи платный API
-                    </p>
-                    <div className="flex items-center gap-3">
-                      <a 
-                        href="/admin" 
-                        className="text-xs text-primary hover:underline font-medium"
-                      >
-                        Открыть админку →
-                      </a>
-                      <a 
-                        href="https://rapidapi.com/api-sports/api/table-tennis" 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="text-xs text-muted-foreground hover:underline"
-                      >
-                        Или получить API ключ
-                      </a>
-                    </div>
-                  </div>
-                </div>
-              </Card>
-            )}
-            
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
               <Card className="p-3 border-border/50 flex items-center gap-2">
                 <div className="bg-red-500/10 p-2 rounded-lg">
@@ -176,11 +146,33 @@ export default function Index() {
               ))}
             </div>
             {filteredMatches.length === 0 && (
-              <div className="text-center py-12 text-muted-foreground">
-                <Icon name="SearchX" size={40} className="mx-auto mb-3 opacity-50" />
-                <p className="text-sm">Нет матчей по заданным фильтрам</p>
-                <p className="text-xs text-muted-foreground/60 mt-1">Попробуйте сбросить фильтры или подождать обновления</p>
-              </div>
+              <Card className="p-8 border-border/50">
+                <div className="text-center">
+                  <Icon name="Inbox" size={48} className="mx-auto mb-4 text-muted-foreground opacity-50" />
+                  <h3 className="text-lg font-semibold mb-2">Нет активных матчей</h3>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Добавьте матчи вручную через админку или подключите API
+                  </p>
+                  <div className="flex items-center justify-center gap-3">
+                    <a href="/admin">
+                      <Button>
+                        <Icon name="Plus" size={16} />
+                        Добавить матчи
+                      </Button>
+                    </a>
+                    <a 
+                      href="https://rapidapi.com/api-sports/api/table-tennis" 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                    >
+                      <Button variant="outline">
+                        <Icon name="Zap" size={16} />
+                        Подключить API
+                      </Button>
+                    </a>
+                  </div>
+                </div>
+              </Card>
             )}
           </div>
         );
@@ -365,16 +357,6 @@ export default function Index() {
               {data?.source === 'live' && (
                 <Badge className="bg-green-500/15 text-green-400 border-green-500/30 gap-1 text-xs">
                   SofaScore
-                </Badge>
-              )}
-              {data?.source === 'demo' && (
-                <Badge className="bg-amber-500/15 text-amber-400 border-amber-500/30 gap-1 text-xs">
-                  Demo режим
-                </Badge>
-              )}
-              {data?.source === 'generated' && (
-                <Badge className="bg-amber-500/15 text-amber-400 border-amber-500/30 gap-1 text-xs">
-                  Симуляция
                 </Badge>
               )}
               {liveCount > 0 && (
