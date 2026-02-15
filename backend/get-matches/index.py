@@ -28,28 +28,48 @@ def handler(event, context):
     all_tournaments = {}
     errors = []
 
+    live_url = 'https://api.sofascore.com/api/v1/sport/table-tennis/events/live'
+    print(f'Fetching live events from {live_url}')
     try:
-        data = fetch_json('https://api.sofascore.com/api/v1/sport/table-tennis/events/live')
-        if data and 'events' in data:
-            for ev in data['events']:
-                all_events.append(ev)
-                add_tournament_stats(all_tournaments, ev, 'live')
+        data = fetch_json(live_url)
+        if data:
+            print(f'Live response: {len(str(data))} bytes, keys: {list(data.keys()) if isinstance(data, dict) else "not dict"}')
+            if 'events' in data:
+                print(f'Found {len(data["events"])} live events')
+                for ev in data['events']:
+                    all_events.append(ev)
+                    add_tournament_stats(all_tournaments, ev, 'live')
+            else:
+                errors.append(f'live: no events key, got: {list(data.keys())[:5]}')
+        else:
+            errors.append('live: fetch returned None')
     except Exception as e:
         errors.append(f'live: {str(e)}')
+        print(f'Live fetch exception: {str(e)}')
 
     now = datetime.now(timezone.utc)
     for offset_days in range(-1, 2):
         day = (now + timedelta(days=offset_days)).strftime('%Y-%m-%d')
+        sched_url = f'https://api.sofascore.com/api/v1/sport/table-tennis/scheduled-events/{day}'
+        print(f'Fetching scheduled events for {day} from {sched_url}')
         try:
-            data = fetch_json(f'https://api.sofascore.com/api/v1/sport/table-tennis/scheduled-events/{day}')
-            if data and 'events' in data:
-                for ev in data['events']:
-                    all_events.append(ev)
-                    st = ev.get('status', {}).get('type', '')
-                    status = 'live' if st == 'inprogress' else ('finished' if st == 'finished' else 'upcoming')
-                    add_tournament_stats(all_tournaments, ev, status)
+            data = fetch_json(sched_url)
+            if data:
+                print(f'Scheduled {day} response: {len(str(data))} bytes, keys: {list(data.keys()) if isinstance(data, dict) else "not dict"}')
+                if 'events' in data:
+                    print(f'Found {len(data["events"])} events for {day}')
+                    for ev in data['events']:
+                        all_events.append(ev)
+                        st = ev.get('status', {}).get('type', '')
+                        status = 'live' if st == 'inprogress' else ('finished' if st == 'finished' else 'upcoming')
+                        add_tournament_stats(all_tournaments, ev, status)
+                else:
+                    errors.append(f'sched_{day}: no events key')
+            else:
+                errors.append(f'sched_{day}: fetch returned None')
         except Exception as e:
             errors.append(f'sched_{day}: {str(e)}')
+            print(f'Scheduled {day} exception: {str(e)}')
 
     filtered_matches = []
 
@@ -135,10 +155,27 @@ def match_sort_key(m):
 
 def fetch_json(url):
     try:
-        req = urllib.request.Request(url, headers={'User-Agent': UA, 'Accept': 'application/json'})
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            return json.loads(resp.read().decode('utf-8'))
-    except Exception:
+        headers = {
+            'User-Agent': UA,
+            'Accept': 'application/json',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Referer': 'https://www.sofascore.com/',
+            'Origin': 'https://www.sofascore.com',
+            'Connection': 'keep-alive',
+            'Cache-Control': 'no-cache'
+        }
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+            return data
+    except urllib.error.HTTPError as e:
+        print(f'HTTP Error {e.code} for {url}: {e.reason}')
+        return None
+    except urllib.error.URLError as e:
+        print(f'URL Error for {url}: {e.reason}')
+        return None
+    except Exception as e:
+        print(f'Fetch error for {url}: {str(e)}')
         return None
 
 

@@ -1,0 +1,10 @@
+{
+  "tests": [
+    {
+      "name": "Proxy live events",
+      "method": "GET",
+      "path": "/?url=https://api.sofascore.com/api/v1/sport/table-tennis/events/live",
+      "expectedStatus": 200
+    }
+  ]
+}
