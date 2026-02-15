@@ -13,39 +13,27 @@ CORS_HEADERS = {
 
 UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
 
-TARGET_LEAGUES = {
-    'russia': ['liga pro', 'лига про', 'russia'],
-    'minsk': ['masters', 'мастерс', 'minsk', 'минск', 'belarus', 'беларусь'],
-}
-
 
 def handler(event, context):
-    """Парсинг реальных матчей Лига Про Россия и Мастерс Минск из SofaScore"""
+    """Парсинг ВСЕХ матчей настольного тенниса с детальным логированием"""
 
     if event.get('httpMethod') == 'OPTIONS':
         return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': ''}
 
     params = event.get('queryStringParameters') or {}
     debug_mode = params.get('debug') == '1'
+    show_all = params.get('showAll') == '1'
 
-    all_matches = []
-    all_tournaments = []
+    all_events = []
+    all_tournaments = {}
     errors = []
-    source = 'live'
 
     try:
         data = fetch_json('https://api.sofascore.com/api/v1/sport/table-tennis/events/live')
         if data and 'events' in data:
             for ev in data['events']:
-                tournament_info = get_tournament_info(ev)
-                if tournament_info not in all_tournaments:
-                    all_tournaments.append(tournament_info)
-
-                if is_target_match(ev):
-                    m = parse_event(ev)
-                    if m:
-                        m['status'] = 'live'
-                        all_matches.append(m)
+                all_events.append(ev)
+                add_tournament_stats(all_tournaments, ev, 'live')
     except Exception as e:
         errors.append(f'live: {str(e)}')
 
@@ -55,40 +43,40 @@ def handler(event, context):
         try:
             data = fetch_json(f'https://api.sofascore.com/api/v1/sport/table-tennis/scheduled-events/{day}')
             if data and 'events' in data:
-                seen_ids = {m['id'] for m in all_matches}
                 for ev in data['events']:
-                    tournament_info = get_tournament_info(ev)
-                    if tournament_info not in all_tournaments:
-                        all_tournaments.append(tournament_info)
-
-                    eid = str(ev.get('id', ''))
-                    if eid in seen_ids:
-                        continue
-
-                    if is_target_match(ev):
-                        m = parse_event(ev)
-                        if m:
-                            all_matches.append(m)
-                            seen_ids.add(eid)
+                    all_events.append(ev)
+                    st = ev.get('status', {}).get('type', '')
+                    status = 'live' if st == 'inprogress' else ('finished' if st == 'finished' else 'upcoming')
+                    add_tournament_stats(all_tournaments, ev, status)
         except Exception as e:
             errors.append(f'sched_{day}: {str(e)}')
 
-    for m in all_matches:
+    filtered_matches = []
+
+    for ev in all_events:
+        should_include = show_all or is_liga_pro(ev)
+
+        if should_include:
+            m = parse_event(ev)
+            if m:
+                filtered_matches.append(m)
+
+    for m in filtered_matches:
         if not m.get('prediction'):
             m['prediction'] = make_smart_prediction(m)
 
-    all_matches.sort(key=match_sort_key)
+    filtered_matches.sort(key=match_sort_key)
 
-    leagues = list(set(m.get('league', '') for m in all_matches))
-    live_count = sum(1 for m in all_matches if m['status'] == 'live')
-    upcoming_count = sum(1 for m in all_matches if m['status'] == 'upcoming')
-    high_conf_count = sum(1 for m in all_matches if m.get('prediction', {}).get('confidence', 0) >= 75)
+    leagues = list(set(m.get('league', '') for m in filtered_matches))
+    live_count = sum(1 for m in filtered_matches if m['status'] == 'live')
+    upcoming_count = sum(1 for m in filtered_matches if m['status'] == 'upcoming')
+    high_conf_count = sum(1 for m in filtered_matches if m.get('prediction', {}).get('confidence', 0) >= 75)
 
     response_body = {
-        'matches': all_matches,
+        'matches': filtered_matches,
         'updatedAt': now.isoformat(),
-        'source': source,
-        'count': len(all_matches),
+        'source': 'live',
+        'count': len(filtered_matches),
         'liveCount': live_count,
         'upcomingCount': upcoming_count,
         'highConfCount': high_conf_count,
@@ -96,7 +84,22 @@ def handler(event, context):
     }
 
     if debug_mode:
-        response_body['allTournaments'] = all_tournaments
+        response_body['totalEventsScanned'] = len(all_events)
+        response_body['tournamentsFound'] = len(all_tournaments)
+        response_body['tournaments'] = [
+            {
+                'key': k,
+                'name': v['info']['name'],
+                'uniqueName': v['info']['uniqueName'],
+                'category': v['info']['category'],
+                'fullText': v['info']['fullText'][:100],
+                'live': v['live'],
+                'upcoming': v['upcoming'],
+                'finished': v['finished'],
+                'isLigaPro': is_liga_pro_text(v['info']['fullText'])
+            }
+            for k, v in sorted(all_tournaments.items(), key=lambda x: x[1]['live'] + x[1]['upcoming'], reverse=True)
+        ][:100]
         response_body['errors'] = errors if errors else None
 
     return {
@@ -104,6 +107,24 @@ def handler(event, context):
         'headers': CORS_HEADERS,
         'body': json.dumps(response_body, ensure_ascii=False, default=str)
     }
+
+
+def add_tournament_stats(tournaments, ev, status):
+    key = get_tournament_key(ev)
+    if key not in tournaments:
+        tournaments[key] = {
+            'info': get_tournament_full_info(ev),
+            'live': 0,
+            'upcoming': 0,
+            'finished': 0
+        }
+
+    if status == 'live':
+        tournaments[key]['live'] += 1
+    elif status == 'finished':
+        tournaments[key]['finished'] += 1
+    else:
+        tournaments[key]['upcoming'] += 1
 
 
 def match_sort_key(m):
@@ -121,64 +142,88 @@ def fetch_json(url):
         return None
 
 
-def get_tournament_info(ev):
+def get_tournament_key(ev):
+    t = ev.get('tournament', {})
+    return str(t.get('id', '')) + '_' + t.get('slug', '')
+
+
+def get_tournament_full_info(ev):
     t = ev.get('tournament', {})
     uniq = t.get('uniqueTournament', {})
     cat = t.get('category', {})
+
+    parts = [
+        t.get('name', ''),
+        t.get('slug', ''),
+        uniq.get('name', '') if uniq else '',
+        uniq.get('slug', '') if uniq else '',
+        cat.get('name', '') if cat else '',
+        cat.get('slug', '') if cat else '',
+    ]
+    full_text = ' '.join([p for p in parts if p]).lower()
+
     return {
         'name': t.get('name', ''),
         'slug': t.get('slug', ''),
         'uniqueName': uniq.get('name', '') if uniq else '',
-        'uniqueSlug': uniq.get('slug', '') if uniq else '',
         'category': cat.get('name', '') if cat else '',
+        'fullText': full_text
     }
 
 
-def is_target_match(ev):
-    """Проверяет, относится ли матч к Лига Про Россия или Мастерс Минск"""
-    t = ev.get('tournament', {})
-    text = (t.get('name', '') + ' ' + t.get('slug', '')).lower()
+def is_liga_pro_text(text):
+    liga_keywords = [
+        'liga pro', 'лига про', 'ligapro',
+        'setka cup', 'сетка', 'setka',
+        'tt cup', 'ttcup',
+        'masters', 'мастерс',
+        'tt elite', 'elite series',
+        'win cup', 'wincup',
+        'challenge', 'challenger',
+    ]
+    return any(kw in text for kw in liga_keywords)
 
-    uniq = t.get('uniqueTournament', {})
-    if uniq:
-        text += ' ' + uniq.get('name', '').lower() + ' ' + uniq.get('slug', '').lower()
 
-    cat = t.get('category', {})
-    if cat:
-        text += ' ' + cat.get('name', '').lower() + ' ' + cat.get('slug', '').lower()
-
-    for league_type, keywords in TARGET_LEAGUES.items():
-        if any(kw in text for kw in keywords):
-            if league_type == 'russia':
-                if 'belarus' not in text and 'minsk' not in text and 'минск' not in text:
-                    return True
-            elif league_type == 'minsk':
-                return True
-
-    return False
+def is_liga_pro(ev):
+    info = get_tournament_full_info(ev)
+    return is_liga_pro_text(info['fullText'])
 
 
 def classify_league(ev):
-    """Определяет название лиги"""
-    t = ev.get('tournament', {})
-    text = (t.get('name', '') + ' ' + t.get('slug', '')).lower()
+    info = get_tournament_full_info(ev)
+    text = info['fullText']
 
-    uniq = t.get('uniqueTournament', {})
-    if uniq:
-        text += ' ' + uniq.get('name', '').lower()
-
-    if 'minsk' in text or 'минск' in text or 'masters' in text or 'мастерс' in text:
-        if 'belarus' in text or 'беларусь' in text:
-            return 'Мастерс Минск'
+    if 'minsk' in text or 'минск' in text or 'belarus' in text:
         return 'Мастерс Минск'
 
-    if 'russia' in text or 'россия' in text or 'liga pro' in text or 'лига про' in text:
-        return 'Лига Про Россия'
+    if 'russia' in text or 'россия' in text:
+        if 'liga pro' in text or 'лига про' in text:
+            return 'Лига Про Россия'
+        if 'setka' in text or 'сетка' in text:
+            return 'Сетка Кап Россия'
 
     if 'setka' in text or 'сетка' in text:
         return 'Сетка Кап'
 
-    return t.get('name', 'TT Liga')
+    if 'liga pro' in text or 'лига про' in text:
+        return 'Лига Про'
+
+    if 'masters' in text or 'мастерс' in text:
+        return 'Мастерс'
+
+    if 'tt cup' in text or 'ttcup' in text:
+        return 'TT Cup'
+
+    if 'elite' in text:
+        return 'Elite Series'
+
+    if 'win cup' in text:
+        return 'Win Cup'
+
+    if 'challenge' in text:
+        return 'Challenger'
+
+    return info.get('name', 'Table Tennis')
 
 
 def player_hash(name):
@@ -272,7 +317,6 @@ def parse_event(ev):
 
 
 def make_smart_prediction(match):
-    """Улучшенный алгоритм прогнозов — ставит только на явных фаворитов"""
     p1 = match['player1']
     p2 = match['player2']
     score = 0.0
