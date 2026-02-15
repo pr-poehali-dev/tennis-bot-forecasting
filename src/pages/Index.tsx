@@ -7,47 +7,49 @@ import AnalyticsPanel from '@/components/AnalyticsPanel';
 import ResultsPanel from '@/components/ResultsPanel';
 import { Card } from '@/components/ui/card';
 import Icon from '@/components/ui/icon';
-import { getFilteredMatches, getPredictionStats } from '@/data/matches';
+import { Badge } from '@/components/ui/badge';
+import { filterMatches, calcStats } from '@/data/matches';
 import type { MatchFilters } from '@/data/matches';
+import { useMatches } from '@/hooks/use-matches';
 
 export default function Index() {
   const [activeTab, setActiveTab] = useState('predictions');
-  const [filters, setFilters] = useState<MatchFilters>({
-    status: 'all',
-  });
+  const [filters, setFilters] = useState<MatchFilters>({ status: 'all' });
+  const { data, isLoading, error, dataUpdatedAt } = useMatches();
 
-  const stats = getPredictionStats();
+  const matches = data?.matches ?? [];
+  const stats = useMemo(() => calcStats(matches), [matches]);
 
   const filteredMatches = useMemo(() => {
-    const baseFilters = { ...filters };
-
-    // For predictions tab, only show upcoming/live with predictions
     if (activeTab === 'predictions') {
-      const liveAndUpcoming = getFilteredMatches({ ...baseFilters, status: 'all' }).filter(
+      const liveAndUpcoming = matches.filter(
         (m) => (m.status === 'upcoming' || m.status === 'live') && m.prediction
       );
-
-      // Apply other filters manually
-      return liveAndUpcoming.filter((m) => {
-        if (baseFilters.minOdds) {
-          const minOdd = Math.min(m.odds.p1Win, m.odds.p2Win);
-          if (minOdd < baseFilters.minOdds) return false;
-        }
-        if (baseFilters.maxOdds) {
-          const maxOdd = Math.max(m.odds.p1Win, m.odds.p2Win);
-          if (maxOdd > baseFilters.maxOdds) return false;
-        }
-        if (baseFilters.minConfidence && m.prediction) {
-          if (m.prediction.confidence < baseFilters.minConfidence) return false;
-        }
-        return true;
-      });
+      return filterMatches(liveAndUpcoming, { ...filters, status: 'all' });
     }
-
-    return getFilteredMatches(baseFilters);
-  }, [filters, activeTab]);
+    return filterMatches(matches, filters);
+  }, [filters, activeTab, matches]);
 
   const renderContent = () => {
+    if (isLoading) {
+      return (
+        <div className="flex flex-col items-center justify-center py-20 gap-3 animate-fade-in">
+          <div className="w-10 h-10 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm text-muted-foreground">Загружаю матчи Лига Про...</p>
+        </div>
+      );
+    }
+
+    if (error) {
+      return (
+        <div className="flex flex-col items-center justify-center py-20 gap-3 animate-fade-in">
+          <Icon name="WifiOff" size={40} className="text-red-400 opacity-60" />
+          <p className="text-sm text-muted-foreground">Не удалось загрузить матчи</p>
+          <p className="text-xs text-muted-foreground/60">Автообновление через 30 сек</p>
+        </div>
+      );
+    }
+
     switch (activeTab) {
       case 'predictions':
         return (
@@ -106,7 +108,7 @@ export default function Index() {
       case 'analytics':
         return (
           <div className="animate-fade-in">
-            <AnalyticsPanel />
+            <AnalyticsPanel matches={matches} />
           </div>
         );
 
@@ -118,7 +120,7 @@ export default function Index() {
               <h2 className="text-lg font-bold text-foreground">Подробная статистика</h2>
             </div>
 
-            <StatsBar />
+            <StatsBar stats={stats} />
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
               <Card className="p-5 border-border/50">
@@ -142,9 +144,7 @@ export default function Index() {
                   <h3 className="text-sm font-semibold">Средний коэффициент</h3>
                 </div>
                 <p className="text-3xl font-bold text-amber-500">{stats.avgOdds}</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  По всем прогнозам
-                </p>
+                <p className="text-xs text-muted-foreground mt-1">По всем прогнозам</p>
               </Card>
 
               <Card className="p-5 border-border/50">
@@ -158,7 +158,7 @@ export default function Index() {
                   {stats.todayCorrect}/{stats.todayPredictions}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {((stats.todayCorrect / stats.todayPredictions) * 100).toFixed(0)}% точность сегодня
+                  {stats.todayPredictions > 0 ? ((stats.todayCorrect / stats.todayPredictions) * 100).toFixed(0) : 0}% точность сегодня
                 </p>
               </Card>
 
@@ -170,9 +170,7 @@ export default function Index() {
                   <h3 className="text-sm font-semibold">Текущая серия</h3>
                 </div>
                 <p className="text-3xl font-bold text-orange-400">{stats.streak}</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Подряд верных прогнозов
-                </p>
+                <p className="text-xs text-muted-foreground mt-1">Подряд верных прогнозов</p>
               </Card>
 
               <Card className="p-5 border-border/50">
@@ -183,9 +181,7 @@ export default function Index() {
                   <h3 className="text-sm font-semibold">ROI</h3>
                 </div>
                 <p className="text-3xl font-bold text-purple-400">+{stats.roi}%</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Возврат инвестиций
-                </p>
+                <p className="text-xs text-muted-foreground mt-1">Возврат инвестиций</p>
               </Card>
 
               <Card className="p-5 border-border/50">
@@ -196,9 +192,7 @@ export default function Index() {
                   <h3 className="text-sm font-semibold">Всего прогнозов</h3>
                 </div>
                 <p className="text-3xl font-bold text-cyan-400">{stats.totalPredictions}</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  За все время
-                </p>
+                <p className="text-xs text-muted-foreground mt-1">За все время</p>
               </Card>
             </div>
           </div>
@@ -207,7 +201,7 @@ export default function Index() {
       case 'results':
         return (
           <div className="animate-fade-in">
-            <ResultsPanel />
+            <ResultsPanel matches={matches} />
           </div>
         );
 
@@ -218,42 +212,33 @@ export default function Index() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
+      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} stats={stats} />
 
-      {/* Main content */}
-      <main className="lg:pl-64 pb-20 lg:pb-0">
-        <div className="p-4 lg:p-6 max-w-7xl mx-auto space-y-4">
-          {/* Header */}
+      <main className="lg:ml-64 p-4 lg:p-6 pb-24 lg:pb-6">
+        <div className="max-w-6xl mx-auto space-y-6">
           <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-xl lg:text-2xl font-bold text-foreground">
-                {activeTab === 'predictions' && 'Прогнозы на матчи'}
-                {activeTab === 'matches' && 'Все матчи'}
-                {activeTab === 'analytics' && 'Аналитика'}
-                {activeTab === 'stats' && 'Статистика'}
-                {activeTab === 'results' && 'Результаты'}
-              </h1>
-              <p className="text-sm text-muted-foreground mt-0.5">
-                Лига Про | Настольный теннис | {new Date().toLocaleDateString('ru-RU', {
-                  day: 'numeric',
-                  month: 'long',
-                  year: 'numeric',
-                })}
-              </p>
+            <div className="lg:hidden flex items-center gap-3">
+              <span className="text-2xl">&#127955;</span>
+              <h1 className="text-lg font-bold text-foreground">TT Predict</h1>
             </div>
-            <div className="hidden lg:flex items-center gap-2 text-xs text-muted-foreground bg-card border border-border/50 rounded-lg px-3 py-2">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-primary" />
-              </span>
-              <span>Данные обновляются в реальном времени</span>
+            <div className="flex items-center gap-2 ml-auto">
+              {data?.source === 'live' && (
+                <Badge className="bg-primary/15 text-primary border-primary/30 gap-1">
+                  <span className="relative flex h-1.5 w-1.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75" />
+                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-primary" />
+                  </span>
+                  Live
+                </Badge>
+              )}
+              {dataUpdatedAt > 0 && (
+                <span className="text-xs text-muted-foreground">
+                  {new Date(dataUpdatedAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              )}
             </div>
           </div>
 
-          {/* Stats bar - always visible on predictions/matches */}
-          {(activeTab === 'predictions' || activeTab === 'matches') && <StatsBar />}
-
-          {/* Tab content */}
           {renderContent()}
         </div>
       </main>

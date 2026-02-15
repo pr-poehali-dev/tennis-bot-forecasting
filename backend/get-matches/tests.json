@@ -1,0 +1,16 @@
+{
+  "tests": [
+    {
+      "name": "Get matches",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 200,
+      "expectedBody": {
+        "matches": "array",
+        "source": "string",
+        "count": "number"
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}

@@ -1,10 +1,11 @@
 import Icon from '@/components/ui/icon';
 import { cn } from '@/lib/utils';
-import { getPredictionStats } from '@/data/matches';
+import type { PredictionStats } from '@/data/matches';
 
 interface SidebarProps {
   activeTab: string;
   onTabChange: (tab: string) => void;
+  stats: PredictionStats;
 }
 
 const navItems = [
@@ -15,8 +16,7 @@ const navItems = [
   { id: 'results', label: 'Результаты', icon: 'Trophy' },
 ];
 
-export default function Sidebar({ activeTab, onTabChange }: SidebarProps) {
-  const stats = getPredictionStats();
+export default function Sidebar({ activeTab, onTabChange, stats }: SidebarProps) {
 
   return (
     <>

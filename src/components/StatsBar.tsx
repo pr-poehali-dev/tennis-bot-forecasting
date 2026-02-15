@@ -1,9 +1,12 @@
 import Icon from '@/components/ui/icon';
 import { Card } from '@/components/ui/card';
-import { getPredictionStats } from '@/data/matches';
+import type { PredictionStats } from '@/data/matches';
 
-export default function StatsBar() {
-  const stats = getPredictionStats();
+interface StatsBarProps {
+  stats: PredictionStats;
+}
+
+export default function StatsBar({ stats }: StatsBarProps) {
 
   const statItems = [
     {
