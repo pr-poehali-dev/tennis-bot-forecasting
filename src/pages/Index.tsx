@@ -5,6 +5,7 @@ import MatchCard from '@/components/MatchCard';
 import FilterPanel from '@/components/FilterPanel';
 import AnalyticsPanel from '@/components/AnalyticsPanel';
 import ResultsPanel from '@/components/ResultsPanel';
+import TelegramButton from '@/components/TelegramButton';
 import { Card } from '@/components/ui/card';
 import Icon from '@/components/ui/icon';
 import { Badge } from '@/components/ui/badge';
@@ -60,9 +61,12 @@ export default function Index() {
                 <Icon name="TrendingUp" size={20} className="text-primary" />
                 Активные прогнозы
               </h2>
-              <span className="text-sm text-muted-foreground">
-                {filteredMatches.length} матчей
-              </span>
+              <div className="flex items-center gap-2">
+                <TelegramButton mode="predictions" />
+                <span className="text-sm text-muted-foreground">
+                  {filteredMatches.length} матчей
+                </span>
+              </div>
             </div>
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
               {filteredMatches.map((match) => (
@@ -200,7 +204,10 @@ export default function Index() {
 
       case 'results':
         return (
-          <div className="animate-fade-in">
+          <div className="space-y-4 animate-fade-in">
+            <div className="flex items-center justify-end">
+              <TelegramButton mode="results" />
+            </div>
             <ResultsPanel matches={matches} />
           </div>
         );
