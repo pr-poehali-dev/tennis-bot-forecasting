@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import Sidebar from '@/components/Sidebar';
 import StatsBar from '@/components/StatsBar';
 import MatchCard from '@/components/MatchCard';
@@ -11,9 +11,10 @@ import Icon from '@/components/ui/icon';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { filterMatches, calcStats } from '@/data/matches';
-import type { MatchFilters, PredictionStats } from '@/data/matches';
+import type { MatchFilters, PredictionStats, Match } from '@/data/matches';
 import { useMatches } from '@/hooks/use-matches';
 import { useStats, useSavePredictions } from '@/hooks/use-stats';
+import { useLiveScoreUpdater } from '@/hooks/use-live-score-updater';
 
 export default function Index() {
   const [activeTab, setActiveTab] = useState('predictions');
@@ -22,9 +23,45 @@ export default function Index() {
   const { data, isLoading, error, dataUpdatedAt } = useMatches();
   const { data: dbStats } = useStats(statsPeriod);
   const savePredictions = useSavePredictions();
+  const [liveScores, setLiveScores] = useState<Record<string, { p1: number; p2: number }>>({});
 
   const matches = data?.matches ?? [];
   const leagues = data?.leagues ?? [];
+  
+  const handleLiveScoreUpdate = useCallback((updates: Array<{ id: string; score: { p1: number; p2: number } }>) => {
+    const newScores: Record<string, { p1: number; p2: number }> = {};
+    updates.forEach(u => {
+      newScores[u.id] = u.score;
+    });
+    setLiveScores(prev => ({ ...prev, ...newScores }));
+    
+    const stored = localStorage.getItem('manual_matches');
+    if (stored) {
+      try {
+        const manual = JSON.parse(stored);
+        const updated = manual.map((m: Match) => {
+          if (newScores[m.id]) {
+            return { ...m, score: newScores[m.id] };
+          }
+          return m;
+        });
+        localStorage.setItem('manual_matches', JSON.stringify(updated));
+      } catch (e) {
+        console.error('Failed to update manual matches', e);
+      }
+    }
+  }, []);
+  
+  useLiveScoreUpdater(matches, handleLiveScoreUpdate);
+  
+  const matchesWithUpdatedScores = useMemo(() => {
+    return matches.map(m => {
+      if (liveScores[m.id]) {
+        return { ...m, score: liveScores[m.id] };
+      }
+      return m;
+    });
+  }, [matches, liveScores]);
 
   const stats: PredictionStats = useMemo(() => {
     if (dbStats && dbStats.total > 0) {
@@ -53,13 +90,13 @@ export default function Index() {
 
   const filteredMatches = useMemo(() => {
     if (activeTab === 'predictions') {
-      const active = matches.filter(
+      const active = matchesWithUpdatedScores.filter(
         (m) => (m.status === 'upcoming' || m.status === 'live') && m.prediction
       );
       return filterMatches(active, { ...filters, status: 'all' });
     }
-    return filterMatches(matches, filters);
-  }, [filters, activeTab, matches]);
+    return filterMatches(matchesWithUpdatedScores, filters);
+  }, [filters, activeTab, matchesWithUpdatedScores]);
 
   const renderContent = () => {
     if (isLoading) {
@@ -352,6 +389,12 @@ export default function Index() {
                 <Badge className="bg-blue-500/15 text-blue-400 border-blue-500/30 gap-1 text-xs">
                   <Icon name="Edit" size={12} />
                   Ручной ввод
+                  {Object.keys(liveScores).length > 0 && (
+                    <span className="relative flex h-1.5 w-1.5 ml-1">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
+                      <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-blue-400" />
+                    </span>
+                  )}
                 </Badge>
               )}
               {data?.source === 'live' && (

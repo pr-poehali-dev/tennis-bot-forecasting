@@ -108,6 +108,17 @@ export default function Admin() {
     setMatches(updated);
     localStorage.setItem('manual_matches', JSON.stringify(updated));
   };
+  
+  const toggleLive = (id: string) => {
+    const updated = matches.map(m => {
+      if (m.id === id) {
+        return { ...m, status: m.status === 'live' ? 'upcoming' : 'live' as const };
+      }
+      return m;
+    });
+    setMatches(updated);
+    localStorage.setItem('manual_matches', JSON.stringify(updated));
+  };
 
   const clearAll = () => {
     setMatches([]);
@@ -253,9 +264,19 @@ export default function Admin() {
                       )}
                     </div>
                   </div>
-                  <Button variant="ghost" size="sm" onClick={() => deleteMatch(m.id)}>
-                    <Icon name="X" size={16} />
-                  </Button>
+                  <div className="flex items-center gap-1">
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={() => toggleLive(m.id)}
+                      title={m.status === 'live' ? 'Остановить live' : 'Запустить live'}
+                    >
+                      <Icon name={m.status === 'live' ? 'Pause' : 'Play'} size={16} className={m.status === 'live' ? 'text-red-400' : 'text-green-400'} />
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => deleteMatch(m.id)}>
+                      <Icon name="X" size={16} />
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -308,6 +329,7 @@ export default function Admin() {
                 <li>Запусти букмарклет (кнопка в закладках)</li>
                 <li>Вернись сюда и нажми "Импортировать найденные матчи"</li>
                 <li>Матчи появятся на главной странице</li>
+                <li className="text-green-400 font-medium">Live счёт обновляется автоматически каждые 10 сек</li>
               </ol>
             </div>
           </div>
