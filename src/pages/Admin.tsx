@@ -16,6 +16,8 @@ interface ManualMatch {
 
 export default function Admin() {
   const [matches, setMatches] = useState<ManualMatch[]>([]);
+  const [importCount, setImportCount] = useState(0);
+  const [hasImportData, setHasImportData] = useState(false);
   
   useEffect(() => {
     const stored = localStorage.getItem('manual_matches');
@@ -26,7 +28,50 @@ export default function Admin() {
         console.error('Failed to load matches', e);
       }
     }
+    
+    checkImportData();
   }, []);
+  
+  const checkImportData = () => {
+    const imported = localStorage.getItem('liga_stavok_import');
+    if (imported) {
+      try {
+        const data = JSON.parse(imported);
+        setImportCount(data.length);
+        setHasImportData(true);
+      } catch {
+        setHasImportData(false);
+      }
+    }
+  };
+  
+  const importFromLigaStavok = () => {
+    const imported = localStorage.getItem('liga_stavok_import');
+    if (!imported) return;
+    
+    try {
+      const data = JSON.parse(imported) as Array<{ player1: string; player2: string }>;
+      const newMatches = data.map(d => ({
+        id: Date.now().toString() + Math.random().toString(36),
+        player1: d.player1,
+        player2: d.player2,
+        league: 'Лига Про Россия',
+        status: 'upcoming' as const
+      }));
+      
+      const updated = [...matches, ...newMatches];
+      setMatches(updated);
+      localStorage.setItem('manual_matches', JSON.stringify(updated));
+      localStorage.removeItem('liga_stavok_import');
+      setHasImportData(false);
+      setImportCount(0);
+      
+      alert(`✅ Импортировано ${newMatches.length} матчей!`);
+    } catch (e) {
+      alert('Ошибка импорта: ' + e);
+    }
+  };
+  
   const [p1, setP1] = useState('');
   const [p2, setP2] = useState('');
   const [league, setLeague] = useState('Лига Про Россия');
@@ -217,16 +262,52 @@ export default function Admin() {
           )}
         </Card>
 
+        <Card className="p-6 border-border/50">
+          <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
+            <Icon name="Download" size={20} className="text-primary" />
+            Импорт из Лига Ставок
+          </h2>
+
+          <div className="bg-primary/5 border border-primary/20 rounded-lg p-4 mb-4">
+            <h3 className="font-semibold text-sm mb-2">🔖 Букмарклет для быстрого импорта</h3>
+            <p className="text-xs text-muted-foreground mb-3">
+              Перетащи эту кнопку на панель закладок браузера, затем запусти её на странице Liga Stavok
+            </p>
+            <div className="bg-background rounded-lg p-3 border border-border">
+              <a
+                href={`javascript:(function(){const m=[];const p=/([А-Яа-я\\s\\.\\-]+[А-Яа-я])\\s*[-–—vs\\.]+\\s*([А-Яа-я\\s\\.\\-]+[А-Яа-я])/gi;document.querySelectorAll('*').forEach(e=>{const t=(e.textContent||'').trim();if(t.length>10&&t.length<200){const r=t.match(p);if(r){const s=t.split(/[-–—vs\\.]/);if(s.length===2){const p1=s[0].trim(),p2=s[1].trim();if(p1.length>3&&p2.length>3&&p1.length<50&&p2.length<50){m.push({player1:p1,player2:p2})}}}}});const u=[];const n=new Set();m.forEach(x=>{const k=x.player1+'|'+x.player2;if(!n.has(k)){n.add(k);u.push(x)}});if(u.length>0){localStorage.setItem('liga_stavok_import',JSON.stringify(u));const d=document.createElement('div');d.style.cssText='position:fixed;top:20px;right:20px;background:#22c55e;color:white;padding:20px;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.3);z-index:999999;font-family:system-ui;min-width:300px';d.innerHTML='<div style="font-size:18px;font-weight:bold;margin-bottom:8px">✅ Найдено '+u.length+' матчей!</div><div style="font-size:14px;opacity:0.9;margin-bottom:12px">Переходи в админку для импорта</div><button onclick="window.open(\\'/admin\\',\\'_blank\\');this.parentElement.remove()" style="background:white;color:#22c55e;border:none;padding:8px 16px;border-radius:6px;font-weight:600;cursor:pointer">Открыть админку</button>';document.body.appendChild(d);setTimeout(()=>d.remove(),10000)}else{alert('❌ Матчи не найдены.\\nПроверь, что ты на странице настольного тенниса')}})();`}
+                className="text-xs font-mono bg-primary text-primary-foreground px-3 py-2 rounded inline-flex items-center gap-2 hover:opacity-80 transition-opacity cursor-move"
+                onClick={(e) => { e.preventDefault(); alert('💡 Инструкция:\n\n1. Зажми эту кнопку левой кнопкой мыши\n2. Перетащи её на панель закладок браузера (верхняя часть окна)\n3. Открой ligastavok.ru → Настольный теннис\n4. Нажми на эту закладку\n5. Вернись сюда и нажми "Импортировать"'); }}
+              >
+                📊 Импорт из Liga Stavok
+              </a>
+            </div>
+            <p className="text-xs text-muted-foreground mt-2">
+              После запуска букмарклета матчи автоматически появятся ниже
+            </p>
+          </div>
+
+          <Button 
+            onClick={importFromLigaStavok}
+            variant="outline"
+            className="w-full"
+            disabled={!hasImportData}
+          >
+            <Icon name="Download" size={16} />
+            Импортировать найденные матчи ({importCount})
+          </Button>
+        </Card>
+
         <Card className="p-4 border-amber-500/30 bg-amber-500/5">
           <div className="flex items-start gap-2">
             <Icon name="Info" size={18} className="text-amber-500 mt-0.5" />
             <div className="text-sm text-muted-foreground">
-              <p className="font-medium text-amber-500 mb-1">Как использовать:</p>
+              <p className="font-medium text-amber-500 mb-1">Инструкция:</p>
               <ol className="list-decimal list-inside space-y-1 text-xs">
-                <li>Открой сайт с матчами (например, flashscore.com)</li>
-                <li>Найди матчи Liga Pro / Setka Cup</li>
-                <li>Скопируй имена игроков и добавь сюда</li>
-                <li>Матчи автоматически появятся на главной странице</li>
+                <li>Открой ligastavok.ru → Настольный теннис → Лига Про</li>
+                <li>Запусти букмарклет (кнопка в закладках)</li>
+                <li>Вернись сюда и нажми "Импортировать найденные матчи"</li>
+                <li>Матчи появятся на главной странице</li>
               </ol>
             </div>
           </div>
