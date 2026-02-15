@@ -64,7 +64,44 @@ export default function Admin() {
     }
     
     try {
-      const data = JSON.parse(importText) as Array<{ player1: string; player2: string }>;
+      let data: Array<{ player1: string; player2: string }>;
+      
+      if (importText.trim().startsWith('[')) {
+        data = JSON.parse(importText);
+      } else {
+        const lines = importText.split('\n').filter(l => l.trim());
+        data = [];
+        
+        for (const line of lines) {
+          const patterns = [
+            /(.+?)\s*[-–—vs.]\s*(.+)/i,
+            /(.+?)\s+vs\s+(.+)/i
+          ];
+          
+          for (const pattern of patterns) {
+            const match = line.match(pattern);
+            if (match) {
+              const p1 = match[1].trim();
+              const p2 = match[2].trim();
+              if (p1 && p2 && p1.length > 2 && p2.length > 2) {
+                data.push({ player1: p1, player2: p2 });
+                break;
+              }
+            }
+          }
+        }
+        
+        if (data.length === 0) {
+          alert('❌ Не удалось распознать матчи.\n\nВставь данные в формате:\nИванов А. - Петров Д.\nили\nИванов А. vs Петров Д.');
+          return;
+        }
+      }
+      
+      if (!Array.isArray(data) || data.length === 0) {
+        alert('❌ Неверный формат данных');
+        return;
+      }
+      
       const newMatches = data.map(d => ({
         id: Date.now().toString() + Math.random().toString(36),
         player1: d.player1,
@@ -80,7 +117,7 @@ export default function Admin() {
       
       alert(`✅ Импортировано ${newMatches.length} матчей!`);
     } catch (e) {
-      alert('Ошибка импорта. Проверь формат данных: ' + e);
+      alert('❌ Ошибка импорта.\n\nВставь данные из букмарклета или в формате:\nИванов А. - Петров Д.\nКозлов С. vs Сидоров М.');
     }
   };
   
@@ -351,23 +388,38 @@ export default function Admin() {
           </div>
 
           <div className="space-y-2 mb-4">
-            <label className="text-sm font-medium">Данные из букмарклета</label>
+            <label className="text-sm font-medium">Данные матчей</label>
             <textarea
               value={importText}
               onChange={(e) => setImportText(e.target.value)}
-              placeholder='Вставь сюда данные из буфера обмена (Ctrl+V)\nДолжно выглядеть так: [{"player1":"Ivanov A.","player2":"Petrov D."}]'
-              className="w-full h-32 px-3 py-2 rounded-lg border border-border bg-background text-foreground font-mono text-xs resize-none"
+              placeholder='Вставь данные из букмарклета (JSON) или просто список:\n\nИванов А. - Петров Д.\nКозлов С. vs Сидоров М.\nНовиков Р. - Федоров Г.'
+              className="w-full h-32 px-3 py-2 rounded-lg border border-border bg-background text-foreground text-sm resize-none"
             />
+            <p className="text-xs text-muted-foreground">
+              💡 Поддерживает JSON из букмарклета или обычный текст (одна пара на строку)
+            </p>
           </div>
 
-          <Button 
-            onClick={importFromText}
-            className="w-full"
-            disabled={!importText.trim()}
-          >
-            <Icon name="Download" size={16} />
-            Импортировать матчи
-          </Button>
+          <div className="flex gap-2">
+            <Button 
+              onClick={importFromText}
+              className="flex-1"
+              disabled={!importText.trim()}
+            >
+              <Icon name="Download" size={16} />
+              Импортировать матчи
+            </Button>
+            <Button 
+              onClick={() => {
+                setImportText('Иванов А. - Петров Д.\nКозлов С. vs Сидоров М.\nНовиков Р. - Федоров Г.');
+              }}
+              variant="outline"
+              size="sm"
+            >
+              <Icon name="TestTube" size={16} />
+              Тест
+            </Button>
+          </div>
         </Card>
 
         <Card className="p-4 border-amber-500/30 bg-amber-500/5">
