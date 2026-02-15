@@ -146,30 +146,19 @@ export default function Index() {
               ))}
             </div>
             {filteredMatches.length === 0 && (
-              <Card className="p-8 border-border/50 border-amber-500/20 bg-amber-500/5">
+              <Card className="p-8 border-border/50">
                 <div className="text-center">
-                  <Icon name="AlertTriangle" size={48} className="mx-auto mb-4 text-amber-500" />
-                  <h3 className="text-lg font-semibold mb-2 text-amber-500">Бесплатные источники заблокированы</h3>
+                  <Icon name="Inbox" size={48} className="mx-auto mb-4 text-muted-foreground opacity-50" />
+                  <h3 className="text-lg font-semibold mb-2">Нет активных матчей</h3>
                   <p className="text-sm text-muted-foreground mb-4">
-                    Liga Stavok, SofaScore и Flashscore блокируют парсинг.<br />
-                    Для работы требуется платный API.
+                    Добавь матчи вручную через админку
                   </p>
-                  <div className="flex flex-col items-center gap-3">
-                    <a 
-                      href="https://rapidapi.com/api-sports/api/table-tennis" 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                    >
-                      <Button className="bg-amber-500 hover:bg-amber-600 text-white">
-                        <Icon name="Zap" size={16} />
-                        Подключить RapidAPI ($9.99/мес)
-                      </Button>
-                    </a>
-                    <p className="text-xs text-muted-foreground max-w-md">
-                      После покупки добавь ключ в секреты проекта:<br />
-                      <code className="bg-muted px-2 py-1 rounded">RAPID_API_KEY</code>
-                    </p>
-                  </div>
+                  <a href="/admin">
+                    <Button>
+                      <Icon name="Plus" size={16} />
+                      Добавить матчи
+                    </Button>
+                  </a>
                 </div>
               </Card>
             )}

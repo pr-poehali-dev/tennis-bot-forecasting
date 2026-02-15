@@ -134,43 +134,83 @@ function predict(m: Match) {
   const factors: string[] = [];
   
   const rd = p1.rating - p2.rating;
-  if (Math.abs(rd) > 20) {
-    score += (rd / 60) * 3.0;
-    if (Math.abs(rd) > 80) factors.push(`Рейтинг ${rd > 0 ? 'выше' : 'ниже'} на ${Math.abs(rd)}`);
+  const ratingWeight = 4.0;
+  if (Math.abs(rd) > 10) {
+    score += (rd / 50) * ratingWeight;
+    if (Math.abs(rd) > 100) {
+      factors.push(`Большое преимущество в рейтинге (${Math.abs(rd)} очков)`);
+    } else if (Math.abs(rd) > 50) {
+      factors.push(`Преимущество в рейтинге (${Math.abs(rd)} очков)`);
+    }
   }
   
   const wd = p1.winRate - p2.winRate;
-  if (Math.abs(wd) > 2) {
-    score += (wd / 12) * 2.5;
-    factors.push(`Винрейт ${Math.max(p1.winRate, p2.winRate)}%`);
+  const winrateWeight = 3.5;
+  if (Math.abs(wd) > 1) {
+    score += (wd / 10) * winrateWeight;
+    if (Math.abs(wd) > 5) {
+      const leader = wd > 0 ? p1 : p2;
+      factors.push(`Высокий винрейт ${leader.name.split(' ')[0]} (${Math.max(p1.winRate, p2.winRate)}%)`);
+    }
   }
   
   const f1 = p1.recentForm.filter(f => f === 'W').length;
   const f2 = p2.recentForm.filter(f => f === 'W').length;
+  const formWeight = 2.8;
   if (Math.abs(f1 - f2) >= 1) {
-    score += ((f1 - f2) * 0.4) * 2.0;
-    if (f1 === 5) factors.push('Серия из 5 побед (П1)');
-    else if (f2 === 5) factors.push('Серия из 5 побед (П2)');
+    score += ((f1 - f2) * 0.5) * formWeight;
+    if (f1 >= 4) {
+      factors.push(`${p1.name.split(' ')[0]} в отличной форме (${f1}/5 побед)`);
+    } else if (f2 >= 4) {
+      factors.push(`${p2.name.split(' ')[0]} в отличной форме (${f2}/5 побед)`);
+    } else if (f1 <= 1) {
+      factors.push(`${p1.name.split(' ')[0]} в слабой форме (${f1}/5 побед)`);
+    } else if (f2 <= 1) {
+      factors.push(`${p2.name.split(' ')[0]} в слабой форме (${f2}/5 побед)`);
+    }
+  }
+  
+  const oddsWeight = 1.2;
+  const oddsDiff = m.odds.p1Win - m.odds.p2Win;
+  if (Math.abs(oddsDiff) > 0.5) {
+    score += (oddsDiff > 0 ? -1 : 1) * oddsWeight;
+    const favorite = oddsDiff < 0 ? p1.name.split(' ')[0] : p2.name.split(' ')[0];
+    const favoriteOdds = Math.min(m.odds.p1Win, m.odds.p2Win);
+    if (favoriteOdds < 1.5) {
+      factors.push(`${favorite} явный фаворит (коэф. ${favoriteOdds})`);
+    }
   }
   
   if (m.status === 'live' && m.score) {
     const d = m.score.p1 - m.score.p2;
+    const liveWeight = 5.0;
     if (d !== 0) {
-      score += d * 0.8 * 2.5;
-      factors.push(`${d > 0 ? 'П1' : 'П2'} лидирует (${m.score.p1}:${m.score.p2})`);
+      score += d * 1.2 * liveWeight;
+      const leader = d > 0 ? p1.name.split(' ')[0] : p2.name.split(' ')[0];
+      if (Math.abs(d) >= 2) {
+        factors.push(`${leader} доминирует (${m.score.p1}:${m.score.p2})`);
+      } else {
+        factors.push(`${leader} лидирует (${m.score.p1}:${m.score.p2})`);
+      }
     }
   }
   
-  const conf = Math.max(45, Math.min(95, Math.round(50 + Math.abs(score) * 6)));
+  const rawConf = 50 + Math.abs(score) * 4.5;
+  const conf = Math.max(48, Math.min(96, Math.round(rawConf)));
+  
   let betType: 'strong' | 'medium' | 'risky' | 'skip' = 'skip';
-  if (conf >= 75) betType = 'strong';
-  else if (conf >= 65) betType = 'medium';
-  else if (conf >= 55) betType = 'risky';
+  if (conf >= 78) betType = 'strong';
+  else if (conf >= 67) betType = 'medium';
+  else if (conf >= 56) betType = 'risky';
+  
+  if (factors.length === 0) {
+    factors.push('Игроки примерно равны по силам');
+  }
   
   return {
     winner: (score >= 0 ? 'p1' : 'p2') as 'p1' | 'p2',
     confidence: conf,
-    factors: factors.length > 0 ? factors.slice(0, 4) : ['Равные шансы'],
+    factors: factors.slice(0, 4),
     betType
   };
 }
@@ -265,31 +305,65 @@ function parseApiSportsEvent(ev: Record<string, unknown>): Match | null {
   }
 }
 
+function loadManualMatches(): Match[] {
+  try {
+    const stored = localStorage.getItem('manual_matches');
+    if (!stored) return [];
+    
+    const manual = JSON.parse(stored) as Array<{
+      id: string;
+      player1: string;
+      player2: string;
+      league: string;
+      status: 'live' | 'upcoming';
+      score?: { p1: number; p2: number };
+    }>;
+    
+    return manual.map(m => {
+      const r1 = rating(m.player1);
+      const r2 = rating(m.player2);
+      
+      const match: Match = {
+        id: m.id,
+        player1: {
+          id: m.player1,
+          name: m.player1,
+          rating: r1,
+          winRate: winrate(r1),
+          recentForm: form(m.player1),
+          country: 'RU'
+        },
+        player2: {
+          id: m.player2,
+          name: m.player2,
+          rating: r2,
+          winRate: winrate(r2),
+          recentForm: form(m.player2),
+          country: 'RU'
+        },
+        startTime: new Date().toISOString(),
+        status: m.status,
+        odds: odds(r1, r2),
+        league: m.league,
+        score: m.score
+      };
+      
+      match.prediction = predict(match);
+      return match;
+    });
+  } catch {
+    return [];
+  }
+}
+
 export async function fetchMatches(): Promise<ApiResponse> {
   const allMatches: Match[] = [];
-  let source = 'liga-stavok';
+  let source = 'manual';
   
-  try {
-    const apiData = await fetchJSON(API_BACKEND) as { events?: Record<string, unknown>[]; source?: string; message?: string; total?: number } | null;
-    
-    if (apiData) {
-      if (apiData.source) {
-        source = apiData.source;
-      }
-      
-      if (apiData.events && Array.isArray(apiData.events) && apiData.events.length > 0) {
-        for (const ev of apiData.events) {
-          const m = parseApiSportsEvent(ev);
-          if (m) allMatches.push(m);
-        }
-      }
-      
-      if (apiData.message) {
-        console.info('Backend message:', apiData.message);
-      }
-    }
-  } catch (e) {
-    console.warn('API backend failed', e);
+  const manualMatches = loadManualMatches();
+  if (manualMatches.length > 0) {
+    allMatches.push(...manualMatches);
+    source = 'manual';
   }
   
   allMatches.sort((a, b) => {
