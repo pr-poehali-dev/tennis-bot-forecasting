@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import Icon from '@/components/ui/icon';
 import { Badge } from '@/components/ui/badge';
+import { useLiveMatcher } from '@/hooks/use-live-matcher';
 
 interface ManualMatch {
   id: string;
@@ -22,6 +23,8 @@ export default function Admin() {
   const [status, setStatus] = useState<'live' | 'upcoming'>('upcoming');
   const [score1, setScore1] = useState('');
   const [score2, setScore2] = useState('');
+  
+  const { liveMatches, loading, findMatch } = useLiveMatcher();
   
   useEffect(() => {
     const stored = localStorage.getItem('manual_matches');
@@ -96,6 +99,28 @@ export default function Admin() {
     if (confirm('Удалить все матчи?')) {
       setMatches([]);
       localStorage.removeItem('manual_matches');
+    }
+  };
+  
+  const autoUpdateScores = () => {
+    let updated = 0;
+    const newMatches = matches.map(m => {
+      if (m.status !== 'live') return m;
+      
+      const liveMatch = findMatch(m.player1, m.player2);
+      if (liveMatch && (liveMatch.score.p1 !== m.score?.p1 || liveMatch.score.p2 !== m.score?.p2)) {
+        updated++;
+        return { ...m, score: liveMatch.score };
+      }
+      return m;
+    });
+    
+    if (updated > 0) {
+      setMatches(newMatches);
+      localStorage.setItem('manual_matches', JSON.stringify(newMatches));
+      alert(`✅ Обновлено счётов: ${updated}`);
+    } else {
+      alert('ℹ️ Новых изменений не найдено');
     }
   };
 
@@ -200,6 +225,26 @@ export default function Admin() {
             Добавить матч
           </Button>
         </Card>
+
+        {matches.filter(m => m.status === 'live').length > 0 && (
+          <Card className="p-4 border-primary/30 bg-primary/5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Icon name="Radio" size={18} className="text-primary" />
+                <div>
+                  <p className="text-sm font-semibold">Автообновление счёта</p>
+                  <p className="text-xs text-muted-foreground">
+                    {loading ? 'Загрузка...' : `${liveMatches.length} live матчей на SofaScore`}
+                  </p>
+                </div>
+              </div>
+              <Button onClick={autoUpdateScores} disabled={loading}>
+                <Icon name="RefreshCw" size={16} />
+                Обновить счёт
+              </Button>
+            </div>
+          </Card>
+        )}
 
         <Card className="p-6 border-border/50">
           <div className="flex items-center justify-between mb-4">
