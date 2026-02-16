@@ -53,7 +53,10 @@ export function useLiveMatcher() {
         });
         
         setLiveMatches(matches);
-        console.log(`✓ Found ${matches.length} live matches`);
+        console.log(`✓ Found ${matches.length} live matches from SofaScore`);
+        if (matches.length > 0) {
+          console.log('Sample match:', matches[0]);
+        }
       } catch (error) {
         console.warn('Live matcher error:', error);
       } finally {
@@ -68,23 +71,31 @@ export function useLiveMatcher() {
   }, []);
   
   const findMatch = (player1: string, player2: string): LiveMatch | null => {
+    console.log(`🔍 Searching for: ${player1} vs ${player2}`);
+    console.log(`Available matches: ${liveMatches.length}`);
+    
     const normalize = (name: string) => name.toLowerCase().replace(/[.,\s]/g, '');
     const p1Norm = normalize(player1);
     const p2Norm = normalize(player2);
+    
+    console.log(`Normalized search: "${p1Norm}" vs "${p2Norm}"`);
     
     for (const match of liveMatches) {
       const m1Norm = normalize(match.player1);
       const m2Norm = normalize(match.player2);
       
-      const p1Words = p1Norm.split(/\s+/);
-      const p2Words = p2Norm.split(/\s+/);
-      const m1Words = m1Norm.split(/\s+/);
-      const m2Words = m2Norm.split(/\s+/);
+      console.log(`Checking: "${m1Norm}" vs "${m2Norm}"`);
+      
+      const p1Words = p1Norm.split(/\s+/).filter(w => w.length > 0);
+      const p2Words = p2Norm.split(/\s+/).filter(w => w.length > 0);
+      const m1Words = m1Norm.split(/\s+/).filter(w => w.length > 0);
+      const m2Words = m2Norm.split(/\s+/).filter(w => w.length > 0);
       
       const p1Match = p1Words.some(w => w.length > 2 && m1Words.some(mw => mw.includes(w) || w.includes(mw)));
       const p2Match = p2Words.some(w => w.length > 2 && m2Words.some(mw => mw.includes(w) || w.includes(mw)));
       
       if (p1Match && p2Match) {
+        console.log(`✅ Found match: ${match.player1} vs ${match.player2} (${match.score.p1}:${match.score.p2})`);
         return match;
       }
       
@@ -92,6 +103,7 @@ export function useLiveMatcher() {
       const p2Match2 = p2Words.some(w => w.length > 2 && m1Words.some(mw => mw.includes(w) || w.includes(mw)));
       
       if (p1Match2 && p2Match2) {
+        console.log(`✅ Found match (reversed): ${match.player2} vs ${match.player1} (${match.score.p2}:${match.score.p1})`);
         return {
           ...match,
           player1: match.player2,
@@ -101,6 +113,7 @@ export function useLiveMatcher() {
       }
     }
     
+    console.log('❌ No match found');
     return null;
   };
   
